@@ -63,15 +63,21 @@ export async function generateImages(
   })
 }
 
+/**
+ * Generates a new batch of images using an enriched prompt derived from the
+ * original prompt and the number of selected images.  Image-to-image transfer
+ * is not supported by the OpenRouter text-to-image API, so this is a
+ * text-only re-generation with a creatively enhanced prompt.
+ */
 export async function generateRevampedImages(
   apiKey: string,
   originalPrompt: string,
-  selectedImages: string[],
+  selectedCount: number,
   count: number,
   ratio: AspectRatio,
   model: string
 ): Promise<string[]> {
-  const revampPrompt = `Based on the style and composition of the selected images, create an improved and revamped version of: ${originalPrompt}. Make it more creative, detailed, and visually striking.`
-  return generateImages(apiKey, revampPrompt, count * selectedImages.length, ratio, model)
+  const revampPrompt = `Create an improved and more visually striking version of: ${originalPrompt}. Make it more creative, detailed, atmospheric, and compositionally interesting.`
+  return generateImages(apiKey, revampPrompt, count * selectedCount, ratio, model)
 }
 

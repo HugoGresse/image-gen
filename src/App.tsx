@@ -71,7 +71,7 @@ export default function App() {
         const urls = await generateRevampedImages(
           apiKey,
           originalPrompt,
-          selectedImages.map((img) => img.url),
+          selectedImages.length,
           count,
           ratio,
           model
