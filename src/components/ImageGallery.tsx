@@ -100,7 +100,7 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
                       generate new variations.
                     </p>
                     <p className="mt-2 text-zinc-400">
-                      Revamp re-uses the session&apos;s prompt, model, and aspect ratio — enriching the prompt to produce more
+                      Revamp re-uses the session's prompt, model, and aspect ratio — enriching the prompt to produce more
                       creative and detailed results. It is a <span className="text-zinc-300">text-to-image</span> re-generation, not
                       image-to-image transfer, so the selected images are used as a count reference only.
                     </p>
@@ -149,7 +149,7 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
 
       {selectionMode && (
         <p className="text-sm text-zinc-500">
-          Select images from a single session to reuse that session&apos;s prompt, model, and aspect ratio, then click{' '}
+          Select images from a single session to reuse that session's prompt, model, and aspect ratio, then click{' '}
           <span className="text-violet-400">Revamp Selection</span> to generate improved variations.
         </p>
       )}

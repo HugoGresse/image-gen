@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import type React from 'react'
 import { ApiKeyInput } from './components/ApiKeyInput'
 import { GenerationForm } from './components/GenerationForm'
 import { ImageGallery } from './components/ImageGallery'
@@ -9,6 +10,22 @@ import type { GenerationParams, ImageSession, GeneratedImage } from './types'
 
 function generateId() {
   return crypto.randomUUID()
+}
+
+/** Updates a single image slot within a session identified by sessionId. */
+function updateSessionImage(
+  setSessions: React.Dispatch<React.SetStateAction<ImageSession[]>>,
+  sessionId: string,
+  index: number,
+  patch: Partial<GeneratedImage>
+) {
+  setSessions((prev) =>
+    prev.map((s) =>
+      s.id === sessionId
+        ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, ...patch } : img)) }
+        : s
+    )
+  )
 }
 
 export default function App() {
@@ -53,22 +70,10 @@ export default function App() {
       imagePromises.forEach((promise, index) => {
         promise
           .then((url) => {
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sessionId
-                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, url, loading: false } : img)) }
-                  : s
-              )
-            )
+            updateSessionImage(setSessions, sessionId, index, { url, loading: false })
           })
           .catch(() => {
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sessionId
-                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, loading: false } : img)) }
-                  : s
-              )
-            )
+            updateSessionImage(setSessions, sessionId, index, { loading: false })
           })
       })
 
@@ -125,22 +130,10 @@ export default function App() {
       imagePromises.forEach((promise, index) => {
         promise
           .then((url) => {
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sessionId
-                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, url, loading: false } : img)) }
-                  : s
-              )
-            )
+            updateSessionImage(setSessions, sessionId, index, { url, loading: false })
           })
           .catch(() => {
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sessionId
-                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, loading: false } : img)) }
-                  : s
-              )
-            )
+            updateSessionImage(setSessions, sessionId, index, { loading: false })
           })
       })
 
