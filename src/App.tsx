@@ -8,7 +8,7 @@ import { trackEvent } from './lib/analytics'
 import type { GenerationParams, ImageSession, GeneratedImage, AspectRatio } from './types'
 
 function generateId() {
-  return Math.random().toString(36).slice(2, 10)
+  return crypto.randomUUID()
 }
 
 export default function App() {
