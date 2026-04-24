@@ -1,18 +1,7 @@
-import OpenAI from 'openai'
 import type { AspectRatio } from '../types'
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const MAX_IMAGES_PER_REQUEST = 8
-
-export const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
-  '1:1': { width: 1024, height: 1024 },
-  '16:9': { width: 1344, height: 768 },
-  '9:16': { width: 768, height: 1344 },
-  '4:3': { width: 1024, height: 768 },
-  '3:4': { width: 768, height: 1024 },
-  '3:2': { width: 1216, height: 832 },
-  '2:3': { width: 832, height: 1216 },
-}
 
 export const IMAGE_MODELS = [
   { id: 'black-forest-labs/flux-1.1-pro', label: 'FLUX 1.1 Pro' },
@@ -23,16 +12,39 @@ export const IMAGE_MODELS = [
   { id: 'recraft-ai/recraft-v3', label: 'Recraft V3' },
 ]
 
-export function createOpenRouterClient(apiKey: string): OpenAI {
-  return new OpenAI({
-    apiKey,
-    baseURL: OPENROUTER_BASE_URL,
-    dangerouslyAllowBrowser: true,
-    defaultHeaders: {
+async function generateSingleImage(
+  apiKey: string,
+  prompt: string,
+  ratio: AspectRatio,
+  model: string,
+): Promise<string> {
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
       'HTTP-Referer': window.location.origin,
       'X-Title': 'Image Gen Dashboard',
     },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      modalities: ['image'],
+      image_config: { aspect_ratio: ratio },
+    }),
   })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`OpenRouter error ${response.status}: ${text.slice(0, 400)}`)
+  }
+
+  const data = await response.json()
+  const url: string | undefined = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url
+  if (!url) {
+    throw new Error('No image returned from OpenRouter. Please try again.')
+  }
+  return url
 }
 
 export async function generateImages(
@@ -42,28 +54,10 @@ export async function generateImages(
   ratio: AspectRatio,
   model: string
 ): Promise<string[]> {
-  const client = createOpenRouterClient(apiKey)
-  const dims = ASPECT_RATIO_DIMENSIONS[ratio]
   const safeCount = Math.min(Math.max(count, 1), MAX_IMAGES_PER_REQUEST)
-  const response = await client.images.generate({
-    model,
-    prompt,
-    n: safeCount,
-    // OpenRouter supports arbitrary sizes; cast to satisfy strict OpenAI types
-    size: `${dims.width}x${dims.height}` as '1024x1024',
-    response_format: 'url',
-  })
-
-  const data = (response as OpenAI.ImagesResponse).data ?? []
-  const urls = data
-    .map((item) => item?.url)
-    .filter((url): url is string => Boolean(url))
-
-  if (urls.length !== safeCount) {
-    throw new Error('Image generation returned incomplete results. Please try again.')
-  }
-
-  return urls
+  return Promise.all(
+    Array.from({ length: safeCount }, () => generateSingleImage(apiKey, prompt, ratio, model)),
+  )
 }
 
 /**
