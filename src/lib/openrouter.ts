@@ -3,7 +3,12 @@ import type { AspectRatio } from '../types'
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const MAX_IMAGES_PER_REQUEST = 8
 
-export const IMAGE_MODELS = [
+export interface ImageModel {
+  id: string
+  label: string
+}
+
+export const FALLBACK_IMAGE_MODELS: ImageModel[] = [
   { id: 'black-forest-labs/flux-1.1-pro', label: 'FLUX 1.1 Pro' },
   { id: 'black-forest-labs/flux-schnell', label: 'FLUX Schnell (fast)' },
   { id: 'black-forest-labs/flux-1-pro', label: 'FLUX 1 Pro' },
@@ -11,6 +16,27 @@ export const IMAGE_MODELS = [
   { id: 'ideogram-ai/ideogram-v2', label: 'Ideogram V2' },
   { id: 'recraft-ai/recraft-v3', label: 'Recraft V3' },
 ]
+
+interface OpenRouterModelEntry {
+  id: string
+  name: string
+  architecture?: {
+    modality?: string
+  }
+}
+
+export async function fetchImageModels(): Promise<ImageModel[]> {
+  const response = await fetch(`${OPENROUTER_BASE_URL}/models`)
+  if (!response.ok) return FALLBACK_IMAGE_MODELS
+  const data = await response.json()
+  const models = (data.data as OpenRouterModelEntry[])
+    .filter((m) => {
+      const parts = m.architecture?.modality?.split('->')
+      return parts && parts.length === 2 && parts[1].includes('image')
+    })
+    .map((m) => ({ id: m.id, label: m.name }))
+  return models.length > 0 ? models : FALLBACK_IMAGE_MODELS
+}
 
 async function generateSingleImage(
   apiKey: string,

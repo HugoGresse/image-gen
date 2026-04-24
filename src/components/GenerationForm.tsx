@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import type { AspectRatio, GenerationParams } from '../types'
-import { IMAGE_MODELS } from '../lib/openrouter'
+import { FALLBACK_IMAGE_MODELS, fetchImageModels } from '../lib/openrouter'
+import type { ImageModel } from '../lib/openrouter'
 
 const RATIOS: AspectRatio[] = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']
 
@@ -14,7 +15,21 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   const [prompt, setPrompt] = useState('')
   const [count, setCount] = useState(4)
   const [ratio, setRatio] = useState<AspectRatio>('1:1')
-  const [model, setModel] = useState(IMAGE_MODELS[0].id)
+  const [models, setModels] = useState<ImageModel[]>(FALLBACK_IMAGE_MODELS)
+  const [loadingModels, setLoadingModels] = useState(true)
+  const [model, setModel] = useState(FALLBACK_IMAGE_MODELS[0].id)
+
+  useEffect(() => {
+    fetchImageModels()
+      .then((fetched) => {
+        setModels(fetched)
+        setModel(fetched[0].id)
+      })
+      .catch(() => {
+        // keep fallback list already set
+      })
+      .finally(() => setLoadingModels(false))
+  }, [])
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -43,9 +58,13 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+            disabled={loadingModels}
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition-colors disabled:opacity-60"
           >
-            {IMAGE_MODELS.map((m) => (
+            {loadingModels && (
+              <option value="">Loading models…</option>
+            )}
+            {models.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
               </option>
