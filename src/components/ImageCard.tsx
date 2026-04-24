@@ -8,24 +8,44 @@ interface ImageCardProps {
 }
 
 export function ImageCard({ image, onToggleSelect, selectionMode, selectionDisabled = false }: ImageCardProps) {
+  const isLoading = image.loading
+  const isFailed = !image.loading && !image.url
+
   return (
     <div
-      onClick={() => selectionMode && !selectionDisabled && onToggleSelect()}
+      onClick={() => selectionMode && !selectionDisabled && !isLoading && onToggleSelect()}
       className={`relative group rounded-2xl overflow-hidden bg-zinc-800 cursor-pointer transition-all duration-200 ${
-        selectionMode && !selectionDisabled ? 'hover:scale-[1.02]' : ''
+        selectionMode && !selectionDisabled && !isLoading ? 'hover:scale-[1.02]' : ''
       } ${
         selectionMode && selectionDisabled ? 'opacity-50 cursor-not-allowed' : ''
       } ${image.selected ? 'ring-2 ring-violet-500 ring-offset-2 ring-offset-zinc-900' : ''}`}
     >
-      <img
-        src={image.url}
-        alt={image.prompt}
-        className="w-full h-full object-cover"
-        loading="lazy"
-      />
+      {isLoading ? (
+        <div className="aspect-square w-full animate-pulse bg-zinc-700 flex items-center justify-center">
+          <svg className="animate-spin h-6 w-6 text-zinc-500" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+      ) : isFailed ? (
+        <div className="aspect-square w-full bg-zinc-800 flex flex-col items-center justify-center gap-2 text-zinc-500">
+          <svg className="w-8 h-8 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" strokeLinecap="round" />
+          </svg>
+          <span className="text-xs">Failed</span>
+        </div>
+      ) : (
+        <img
+          src={image.url}
+          alt={image.prompt}
+          className="w-full h-full object-cover"
+          loading="lazy"
+        />
+      )}
 
       {/* Hover overlay */}
-      {selectionMode && (
+      {selectionMode && !isLoading && (
         <div
           className={`absolute inset-0 transition-colors duration-200 ${
             image.selected ? 'bg-violet-600/20' : 'bg-transparent group-hover:bg-zinc-900/30'
@@ -34,7 +54,7 @@ export function ImageCard({ image, onToggleSelect, selectionMode, selectionDisab
       )}
 
       {/* Selection checkbox */}
-      {selectionMode && (
+      {selectionMode && !isLoading && (
         <div
           className={`absolute top-3 right-3 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
             image.selected
@@ -51,7 +71,7 @@ export function ImageCard({ image, onToggleSelect, selectionMode, selectionDisab
       )}
 
       {/* Download button (always visible on hover when not in selection mode) */}
-      {!selectionMode && (
+      {!selectionMode && !isLoading && !isFailed && (
         <div className="absolute inset-0 flex items-end justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity">
           <a
             href={image.url}

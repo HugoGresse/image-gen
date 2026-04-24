@@ -28,30 +28,58 @@ export default function App() {
       setError(null)
       trackEvent('generate_images', { count: params.count, ratio: params.ratio, model: params.model })
 
-      try {
-        const urls = await generateImages(apiKey, params.prompt, params.count, params.ratio, params.model)
-        const newSession: ImageSession = {
+      const sessionId = generateId()
+      const now = Date.now()
+      const imagePromises = generateImages(apiKey, params.prompt, params.count, params.ratio, params.model)
+
+      // Create the session immediately with loading placeholders so images appear as they arrive
+      const newSession: ImageSession = {
+        id: sessionId,
+        params,
+        createdAt: now,
+        images: imagePromises.map(() => ({
           id: generateId(),
-          params,
-          createdAt: Date.now(),
-          images: urls.map((url) => ({
-            id: generateId(),
-            url,
-            prompt: params.prompt,
-            ratio: params.ratio,
-            model: params.model,
-            createdAt: Date.now(),
-            selected: false,
-          })),
-        }
-        setSessions((prev) => [newSession, ...prev])
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to generate images.'
+          url: '',
+          prompt: params.prompt,
+          ratio: params.ratio,
+          model: params.model,
+          createdAt: now,
+          selected: false,
+          loading: true,
+        })),
+      }
+      setSessions((prev) => [newSession, ...prev])
+
+      imagePromises.forEach((promise, index) => {
+        promise
+          .then((url) => {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionId
+                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, url, loading: false } : img)) }
+                  : s
+              )
+            )
+          })
+          .catch(() => {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionId
+                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, loading: false } : img)) }
+                  : s
+              )
+            )
+          })
+      })
+
+      const results = await Promise.allSettled(imagePromises)
+      const firstRejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (firstRejected) {
+        const msg = firstRejected.reason instanceof Error ? firstRejected.reason.message : 'Failed to generate some images.'
         setError(msg)
         trackEvent('generate_error')
-      } finally {
-        setIsLoading(false)
       }
+      setIsLoading(false)
     },
     [apiKey]
   )
@@ -66,35 +94,64 @@ export default function App() {
       const { prompt, ratio, model } = sourceParams
       const count = Math.max(1, selectedImages.length)
 
-      try {
-        const urls = await generateRevampedImages(apiKey, prompt, count, ratio, model)
-        const newSession: ImageSession = {
+      const sessionId = generateId()
+      const now = Date.now()
+      const revampedPrompt = `[Revamp] ${prompt}`
+      const imagePromises = generateRevampedImages(apiKey, prompt, count, ratio, model)
+
+      // Create the session immediately with loading placeholders
+      const newSession: ImageSession = {
+        id: sessionId,
+        params: {
+          prompt: revampedPrompt,
+          count: imagePromises.length,
+          ratio,
+          model,
+        },
+        createdAt: now,
+        images: imagePromises.map(() => ({
           id: generateId(),
-          params: {
-            prompt: `[Revamp] ${prompt}`,
-            count: urls.length,
-            ratio,
-            model,
-          },
-          createdAt: Date.now(),
-          images: urls.map((url) => ({
-            id: generateId(),
-            url,
-            prompt: `[Revamp] ${prompt}`,
-            ratio,
-            model,
-            createdAt: Date.now(),
-            selected: false,
-          })),
-        }
-        setSessions((prev) => [newSession, ...prev])
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to revamp images.'
+          url: '',
+          prompt: revampedPrompt,
+          ratio,
+          model,
+          createdAt: now,
+          selected: false,
+          loading: true,
+        })),
+      }
+      setSessions((prev) => [newSession, ...prev])
+
+      imagePromises.forEach((promise, index) => {
+        promise
+          .then((url) => {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionId
+                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, url, loading: false } : img)) }
+                  : s
+              )
+            )
+          })
+          .catch(() => {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionId
+                  ? { ...s, images: s.images.map((img, i) => (i === index ? { ...img, loading: false } : img)) }
+                  : s
+              )
+            )
+          })
+      })
+
+      const results = await Promise.allSettled(imagePromises)
+      const firstRejected = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+      if (firstRejected) {
+        const msg = firstRejected.reason instanceof Error ? firstRejected.reason.message : 'Failed to revamp images.'
         setError(msg)
         trackEvent('revamp_error')
-      } finally {
-        setIsRevamping(false)
       }
+      setIsRevamping(false)
     },
     [apiKey]
   )
@@ -143,24 +200,6 @@ export default function App() {
             <div>
               <span className="font-semibold">Error: </span>
               {error}
-            </div>
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {isLoading && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-zinc-400 text-sm">
-              <svg className="animate-spin h-4 w-4 text-violet-400" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Generating images…
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="aspect-square bg-zinc-800 rounded-2xl animate-pulse" />
-              ))}
             </div>
           </div>
         )}

@@ -67,18 +67,47 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
 
         <div className="flex items-center gap-3">
           {!selectionMode ? (
-            <button
-              onClick={handleEnterSelectionMode}
-              className="text-sm text-violet-400 hover:text-violet-300 border border-violet-500/40 hover:border-violet-400 px-4 py-1.5 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <path d="M14 17h7M17 14v7" strokeLinecap="round" />
-              </svg>
-              Select for Revamp
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleEnterSelectionMode}
+                className="text-sm text-violet-400 hover:text-violet-300 border border-violet-500/40 hover:border-violet-400 px-4 py-1.5 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <path d="M14 17h7M17 14v7" strokeLinecap="round" />
+                </svg>
+                Select for Revamp
+              </button>
+              {/* Revamp info tooltip */}
+              <div className="relative group/revampinfo">
+                <svg
+                  className="w-4 h-4 text-zinc-500 hover:text-zinc-300 cursor-help transition-colors"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+                </svg>
+                <div className="absolute right-0 top-6 z-20 w-72 pointer-events-none opacity-0 group-hover/revampinfo:opacity-100 transition-opacity duration-150">
+                  <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-zinc-300 shadow-xl leading-relaxed">
+                    <p className="font-semibold text-white mb-1">How Revamp works</p>
+                    <p>
+                      Select images from a single session, then click <span className="text-violet-400">Revamp Selection</span> to
+                      generate new variations.
+                    </p>
+                    <p className="mt-2 text-zinc-400">
+                      Revamp re-uses the session&apos;s prompt, model, and aspect ratio — enriching the prompt to produce more
+                      creative and detailed results. It is a <span className="text-zinc-300">text-to-image</span> re-generation, not
+                      image-to-image transfer, so the selected images are used as a count reference only.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-400">
