@@ -5,7 +5,7 @@ import { ImageGallery } from './components/ImageGallery'
 import { getStoredApiKey } from './lib/storage'
 import { generateImages, generateRevampedImages } from './lib/openrouter'
 import { trackEvent } from './lib/analytics'
-import type { GenerationParams, ImageSession, GeneratedImage, AspectRatio } from './types'
+import type { GenerationParams, ImageSession, GeneratedImage } from './types'
 
 function generateId() {
   return crypto.randomUUID()
@@ -57,29 +57,21 @@ export default function App() {
   )
 
   const handleRevamp = useCallback(
-    async (selectedImages: GeneratedImage[], originalPrompt: string, ratio: AspectRatio) => {
+    async (selectedImages: GeneratedImage[], sourceParams: GenerationParams) => {
       if (!apiKey) return
       setIsRevamping(true)
       setError(null)
       trackEvent('revamp_images', { count: selectedImages.length })
 
-      const firstSession = sessions[0]
-      const model = firstSession?.params.model ?? selectedImages[0]?.model ?? 'black-forest-labs/flux-1.1-pro'
-      const count = Math.max(1, Math.ceil(selectedImages.length / 2))
+      const { prompt, ratio, model } = sourceParams
+      const count = Math.max(1, selectedImages.length)
 
       try {
-        const urls = await generateRevampedImages(
-          apiKey,
-          originalPrompt,
-          selectedImages.length,
-          count,
-          ratio,
-          model
-        )
+        const urls = await generateRevampedImages(apiKey, prompt, count, ratio, model)
         const newSession: ImageSession = {
           id: generateId(),
           params: {
-            prompt: `[Revamp] ${originalPrompt}`,
+            prompt: `[Revamp] ${prompt}`,
             count: urls.length,
             ratio,
             model,
@@ -88,7 +80,7 @@ export default function App() {
           images: urls.map((url) => ({
             id: generateId(),
             url,
-            prompt: `[Revamp] ${originalPrompt}`,
+            prompt: `[Revamp] ${prompt}`,
             ratio,
             model,
             createdAt: Date.now(),
@@ -104,7 +96,7 @@ export default function App() {
         setIsRevamping(false)
       }
     },
-    [apiKey, sessions]
+    [apiKey]
   )
 
   return (

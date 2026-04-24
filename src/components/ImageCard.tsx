@@ -2,16 +2,19 @@ import type { GeneratedImage } from '../types'
 
 interface ImageCardProps {
   image: GeneratedImage
-  onToggleSelect: (id: string) => void
+  onToggleSelect: () => void
   selectionMode: boolean
+  selectionDisabled?: boolean
 }
 
-export function ImageCard({ image, onToggleSelect, selectionMode }: ImageCardProps) {
+export function ImageCard({ image, onToggleSelect, selectionMode, selectionDisabled = false }: ImageCardProps) {
   return (
     <div
-      onClick={() => selectionMode && onToggleSelect(image.id)}
+      onClick={() => selectionMode && !selectionDisabled && onToggleSelect()}
       className={`relative group rounded-2xl overflow-hidden bg-zinc-800 cursor-pointer transition-all duration-200 ${
-        selectionMode ? 'hover:scale-[1.02]' : ''
+        selectionMode && !selectionDisabled ? 'hover:scale-[1.02]' : ''
+      } ${
+        selectionMode && selectionDisabled ? 'opacity-50 cursor-not-allowed' : ''
       } ${image.selected ? 'ring-2 ring-violet-500 ring-offset-2 ring-offset-zinc-900' : ''}`}
     >
       <img

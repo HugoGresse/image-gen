@@ -11,12 +11,21 @@ export function ApiKeyInput({ apiKey, onApiKeyChange }: ApiKeyInputProps) {
   const [value, setValue] = useState(apiKey)
 
   function handleSave() {
-    saveApiKey(value)
-    onApiKeyChange(value)
+    const trimmedValue = value.trim()
+
+    if (!trimmedValue) {
+      return
+    }
+
+    saveApiKey(trimmedValue)
+    onApiKeyChange(trimmedValue)
+    setValue(trimmedValue)
     setEditing(false)
   }
 
   function handleReset() {
+    saveApiKey('')
+    onApiKeyChange('')
     setValue('')
     setEditing(true)
   }
@@ -43,7 +52,15 @@ export function ApiKeyInput({ apiKey, onApiKeyChange }: ApiKeyInputProps) {
         type="password"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+
+            if (value.trim()) {
+              handleSave()
+            }
+          }
+        }}
         placeholder="sk-or-v1-..."
         className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 w-72"
       />

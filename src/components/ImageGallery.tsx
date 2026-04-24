@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import type { GeneratedImage, ImageSession, AspectRatio } from '../types'
+import type { GeneratedImage, ImageSession, GenerationParams } from '../types'
 import { ImageCard } from './ImageCard'
 
 interface ImageGalleryProps {
   sessions: ImageSession[]
-  onRevamp: (selectedImages: GeneratedImage[], originalPrompt: string, ratio: AspectRatio) => void
+  onRevamp: (selectedImages: GeneratedImage[], sourceParams: GenerationParams) => void
   isRevamping: boolean
 }
 
@@ -13,16 +13,23 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const allImages = sessions.flatMap((s) =>
-    s.images.map((img) => ({ ...img, selected: selected.has(img.id) }))
+    s.images.map((img) => ({
+      ...img,
+      selected: selected.has(img.id),
+      sessionId: s.id,
+      sessionParams: s.params,
+    }))
   )
   const selectedImages = allImages.filter((img) => img.selected)
-  const latestSession = sessions[0]
+  const selectedSessionId = selectedImages[0]?.sessionId ?? null
 
-  function toggleSelect(id: string) {
+  function toggleSelect(sessionId: string, id: string) {
     setSelected((prev) => {
       const next = new Set(prev)
+
       if (next.has(id)) next.delete(id)
-      else next.add(id)
+      else if (!selectedSessionId || selectedSessionId === sessionId) next.add(id)
+
       return next
     })
   }
@@ -38,8 +45,11 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
   }
 
   function handleRevamp() {
-    if (!latestSession || selectedImages.length === 0) return
-    onRevamp(selectedImages, latestSession.params.prompt, latestSession.params.ratio)
+    const sourceParams = selectedImages[0]?.sessionParams
+
+    if (!sourceParams || selectedImages.length === 0) return
+
+    onRevamp(selectedImages, sourceParams)
     setSelectionMode(false)
     setSelected(new Set())
   }
@@ -110,7 +120,8 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
 
       {selectionMode && (
         <p className="text-sm text-zinc-500">
-          Click images to select them, then click <span className="text-violet-400">Revamp Selection</span> to generate improved variations.
+          Select images from a single session to reuse that session&apos;s prompt, model, and aspect ratio, then click{' '}
+          <span className="text-violet-400">Revamp Selection</span> to generate improved variations.
         </p>
       )}
 
@@ -128,8 +139,9 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
                 <ImageCard
                   key={image.id}
                   image={{ ...image, selected: selected.has(image.id) }}
-                  onToggleSelect={toggleSelect}
+                  onToggleSelect={() => toggleSelect(session.id, image.id)}
                   selectionMode={selectionMode}
+                  selectionDisabled={selectedSessionId !== null && selectedSessionId !== session.id}
                 />
               ))}
             </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 import type { AspectRatio, GenerationParams } from '../types'
 import { IMAGE_MODELS } from '../lib/openrouter'
 
@@ -15,7 +16,7 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   const [ratio, setRatio] = useState<AspectRatio>('1:1')
   const [model, setModel] = useState(IMAGE_MODELS[0].id)
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!prompt.trim() || isLoading) return
     onGenerate({ prompt: prompt.trim(), count, ratio, model })

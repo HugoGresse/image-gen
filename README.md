@@ -1,73 +1,38 @@
-# React + TypeScript + Vite
+# Image Gen
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend-only image generation dashboard built with Vite, React, and the OpenRouter-compatible `openai` SDK.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Generate 1–8 images from a text prompt
+- Choose the model and aspect ratio for each generation
+- Browse results by session in a gallery
+- Select images from a single session and create a revamped batch using that session's prompt, model, and aspect ratio
+- Save your OpenRouter API key locally in the browser for convenience
+- Send lightweight analytics events to `plausible.gresse.io`
 
-## React Compiler
+## OpenRouter API key handling
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+This project is intentionally browser-only. Your OpenRouter API key is stored in `localStorage` under the `openrouter_api_key` key and is sent directly from the browser to `https://openrouter.ai/api/v1`.
 
-## Expanding the ESLint configuration
+## Development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Validation
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run lint
+npm run build
 ```
+
+## GitHub Pages deployment
+
+GitHub Pages deployment is configured in `.github/workflows/deploy.yml`.
+
+- Pushes to `main` build the app and deploy `dist/` with GitHub Actions
+- `vite.config.ts` sets the correct `base` path automatically from `GITHUB_REPOSITORY`
+- In the repository settings, set **Pages → Source** to **GitHub Actions**
