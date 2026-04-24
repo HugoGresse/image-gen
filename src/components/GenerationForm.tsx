@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent } from 'react'
 import type { AspectRatio, GenerationParams } from '../types'
-import { IMAGE_MODELS } from '../lib/openrouter'
+import { fetchImageModels } from '../lib/openrouter'
+import type { ImageModel } from '../lib/openrouter'
 
 const RATIOS: AspectRatio[] = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']
 
@@ -14,11 +15,30 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   const [prompt, setPrompt] = useState('')
   const [count, setCount] = useState(4)
   const [ratio, setRatio] = useState<AspectRatio>('1:1')
-  const [model, setModel] = useState(IMAGE_MODELS[0].id)
+  const [models, setModels] = useState<ImageModel[]>([])
+  const [loadingModels, setLoadingModels] = useState(true)
+  const [modelsError, setModelsError] = useState<string | null>(null)
+  const [model, setModel] = useState('')
+
+  useEffect(() => {
+    fetchImageModels()
+      .then((fetched) => {
+        if (fetched.length === 0) {
+          setModelsError('No image generation models available.')
+          return
+        }
+        setModels(fetched)
+        setModel(fetched[0].id)
+      })
+      .catch((err: unknown) => {
+        setModelsError(err instanceof Error ? err.message : 'Failed to load models.')
+      })
+      .finally(() => setLoadingModels(false))
+  }, [])
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!prompt.trim() || isLoading) return
+    if (!prompt.trim() || isLoading || !model) return
     onGenerate({ prompt: prompt.trim(), count, ratio, model })
   }
 
@@ -40,17 +60,25 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
         {/* Model */}
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-2">Model</label>
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
-          >
-            {IMAGE_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          {modelsError ? (
+            <p className="text-xs text-red-400 mt-1">{modelsError}</p>
+          ) : (
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={loadingModels}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition-colors disabled:opacity-60"
+            >
+              {loadingModels && (
+                <option value="">Loading models…</option>
+              )}
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Count */}
@@ -96,7 +124,7 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
 
       <button
         type="submit"
-        disabled={!prompt.trim() || isLoading}
+        disabled={!prompt.trim() || isLoading || !model}
         className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
       >
         {isLoading ? (
