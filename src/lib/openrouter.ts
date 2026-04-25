@@ -65,17 +65,19 @@ async function generateSingleImage(
   return url
 }
 
-export async function generateImages(
+/**
+ * Returns an array of individual promises — one per image — so the caller can
+ * display each image as soon as it resolves rather than waiting for the full batch.
+ */
+export function generateImages(
   apiKey: string,
   prompt: string,
   count: number,
   ratio: AspectRatio,
   model: string
-): Promise<string[]> {
+): Promise<string>[] {
   const safeCount = Math.min(Math.max(count, 1), MAX_IMAGES_PER_REQUEST)
-  return Promise.all(
-    Array.from({ length: safeCount }, () => generateSingleImage(apiKey, prompt, ratio, model)),
-  )
+  return Array.from({ length: safeCount }, () => generateSingleImage(apiKey, prompt, ratio, model))
 }
 
 /**
@@ -84,13 +86,13 @@ export async function generateImages(
  * is not supported by the OpenRouter text-to-image API, so this is a
  * text-only re-generation with a creatively enhanced prompt.
  */
-export async function generateRevampedImages(
+export function generateRevampedImages(
   apiKey: string,
   originalPrompt: string,
   count: number,
   ratio: AspectRatio,
   model: string
-): Promise<string[]> {
+): Promise<string>[] {
   const revampPrompt = `Create an improved and more visually striking version of: ${originalPrompt}. Make it more creative, detailed, atmospheric, and compositionally interesting.`
   return generateImages(apiKey, revampPrompt, count, ratio, model)
 }

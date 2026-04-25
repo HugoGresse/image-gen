@@ -15,6 +15,7 @@ export interface GeneratedImage {
   model: string
   createdAt: number
   selected: boolean
+  loading?: boolean
 }
 
 export interface ImageSession {
