@@ -54,7 +54,9 @@ async function generateSingleImage(
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`OpenRouter error ${response.status}: ${text.slice(0, 400)}`)
+    const snippet = text.slice(0, 400)
+    const suffix = text.length > 400 ? '… (truncated)' : ''
+    throw new Error(`OpenRouter error ${response.status}: ${snippet}${suffix}`)
   }
 
   const data = await response.json()
@@ -81,18 +83,70 @@ export function generateImages(
 }
 
 /**
- * Generates a new batch of images using an enriched prompt derived from the
- * original prompt and the number of selected images.  Image-to-image transfer
- * is not supported by the OpenRouter text-to-image API, so this is a
- * text-only re-generation with a creatively enhanced prompt.
+ * Sends each selected image back to the model as a multimodal message
+ * (image + refinement instruction) and requests a new image in return.
+ * Returns one promise per selected image URL.
+ */
+async function generateSingleRevampedImage(
+  apiKey: string,
+  imageUrl: string,
+  refinementHint: string,
+  ratio: AspectRatio,
+  model: string,
+): Promise<string> {
+  const instruction = refinementHint.trim()
+    ? refinementHint.trim()
+    : 'Refine and improve this image, enhancing detail, composition, and visual quality.'
+
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': window.location.origin,
+      'X-Title': 'Image Gen Dashboard',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: imageUrl } },
+            { type: 'text', text: instruction },
+          ],
+        },
+      ],
+      modalities: ['image'],
+      image_config: { aspect_ratio: ratio },
+    }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    const snippet = text.slice(0, 400)
+    const suffix = text.length > 400 ? '… (truncated)' : ''
+    throw new Error(`OpenRouter error ${response.status}: ${snippet}${suffix}`)
+  }
+
+  const data = await response.json()
+  const url: string | undefined = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url
+  if (!url) {
+    throw new Error('No image returned from OpenRouter. Please try again.')
+  }
+  return url
+}
+
+/**
+ * For each selected image URL, sends it together with the user's refinement
+ * hint to the model as a multimodal request and returns one promise per image.
  */
 export function generateRevampedImages(
   apiKey: string,
-  originalPrompt: string,
-  count: number,
+  imageUrls: string[],
+  refinementHint: string,
   ratio: AspectRatio,
   model: string
 ): Promise<string>[] {
-  const revampPrompt = `Create an improved and more visually striking version of: ${originalPrompt}. Make it more creative, detailed, atmospheric, and compositionally interesting.`
-  return generateImages(apiKey, revampPrompt, count, ratio, model)
+  return imageUrls.map((url) => generateSingleRevampedImage(apiKey, url, refinementHint, ratio, model))
 }

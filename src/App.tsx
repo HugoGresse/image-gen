@@ -90,19 +90,19 @@ export default function App() {
   )
 
   const handleRevamp = useCallback(
-    async (selectedImages: GeneratedImage[], sourceParams: GenerationParams) => {
+    async (selectedImages: GeneratedImage[], sourceParams: GenerationParams, refinementHint: string) => {
       if (!apiKey) return
       setIsRevamping(true)
       setError(null)
       trackEvent('revamp_images', { count: selectedImages.length })
 
-      const { prompt, ratio, model } = sourceParams
-      const count = Math.max(1, selectedImages.length)
+      const { ratio, model } = sourceParams
+      const revampedPrompt = `[Revamp] ${sourceParams.prompt}`
+      const imageUrls = selectedImages.map((img) => img.url).filter(Boolean)
 
       const sessionId = generateId()
       const now = Date.now()
-      const revampedPrompt = `[Revamp] ${prompt}`
-      const imagePromises = generateRevampedImages(apiKey, prompt, count, ratio, model)
+      const imagePromises = generateRevampedImages(apiKey, imageUrls, refinementHint, ratio, model)
 
       // Create the session immediately with loading placeholders
       const newSession: ImageSession = {

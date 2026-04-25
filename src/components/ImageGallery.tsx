@@ -4,13 +4,15 @@ import { ImageCard } from './ImageCard'
 
 interface ImageGalleryProps {
   sessions: ImageSession[]
-  onRevamp: (selectedImages: GeneratedImage[], sourceParams: GenerationParams) => void
+  onRevamp: (selectedImages: GeneratedImage[], sourceParams: GenerationParams, refinementHint: string) => void
   isRevamping: boolean
 }
 
 export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryProps) {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [showRevampInput, setShowRevampInput] = useState(false)
+  const [revampHint, setRevampHint] = useState('')
 
   const allImages = sessions.flatMap((s) =>
     s.images.map((img) => ({
@@ -37,21 +39,31 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
   function handleEnterSelectionMode() {
     setSelectionMode(true)
     setSelected(new Set())
+    setShowRevampInput(false)
+    setRevampHint('')
   }
 
   function handleCancelSelection() {
     setSelectionMode(false)
     setSelected(new Set())
+    setShowRevampInput(false)
+    setRevampHint('')
   }
 
-  function handleRevamp() {
+  function handleRevampClick() {
+    setShowRevampInput(true)
+  }
+
+  function handleConfirmRevamp() {
     const sourceParams = selectedImages[0]?.sessionParams
 
     if (!sourceParams || selectedImages.length === 0) return
 
-    onRevamp(selectedImages, sourceParams)
+    onRevamp(selectedImages, sourceParams, revampHint)
     setSelectionMode(false)
     setSelected(new Set())
+    setShowRevampInput(false)
+    setRevampHint('')
   }
 
   if (sessions.length === 0) return null
@@ -96,26 +108,55 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
                   <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-zinc-300 shadow-xl leading-relaxed">
                     <p className="font-semibold text-white mb-1">How Revamp works</p>
                     <p>
-                      Select images from a single session, then click <span className="text-violet-400">Revamp Selection</span> to
-                      generate new variations.
+                      Select images from a single session, add an optional refinement hint, then click{' '}
+                      <span className="text-violet-400">Revamp Selection</span> to generate refined variations.
                     </p>
                     <p className="mt-2 text-zinc-400">
-                      Revamp re-uses the session's prompt, model, and aspect ratio — enriching the prompt to produce more
-                      creative and detailed results. It is a <span className="text-zinc-300">text-to-image</span> re-generation, not
-                      image-to-image transfer, so the selected images are used as a count reference only.
+                      Each selected image is sent back to the <span className="text-zinc-300">currently selected model</span> as
+                      a multimodal input alongside your refinement instruction, producing one new image per selection.
                     </p>
                   </div>
                 </div>
               </div>
             </div>
-          ) : (
+          ) : !showRevampInput ? (
             <div className="flex items-center gap-2">
               <span className="text-sm text-zinc-400">
                 {selectedImages.length} selected
               </span>
               <button
-                onClick={handleRevamp}
+                onClick={handleRevampClick}
                 disabled={selectedImages.length === 0 || isRevamping}
+                className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-1.5 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M23 4v6h-6M1 20v-6h6" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Revamp Selection
+              </button>
+              <button
+                onClick={handleCancelSelection}
+                className="text-zinc-400 hover:text-white text-sm px-3 py-1.5 rounded-lg border border-zinc-700 hover:border-zinc-500 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            /* Refinement hint input step */
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={revampHint}
+                onChange={(e) => setRevampHint(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!isRevamping) handleConfirmRevamp() } }}
+                placeholder="Refinement hint (optional)…"
+                className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 w-56 transition-colors"
+                autoFocus
+              />
+              <button
+                onClick={handleConfirmRevamp}
+                disabled={isRevamping}
                 className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-1.5 rounded-lg transition-colors flex items-center gap-2"
               >
                 {isRevamping ? (
@@ -132,7 +173,7 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
                       <path d="M23 4v6h-6M1 20v-6h6" strokeLinecap="round" strokeLinejoin="round" />
                       <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    Revamp Selection
+                    Confirm Revamp
                   </>
                 )}
               </button>
@@ -147,10 +188,17 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
         </div>
       </div>
 
-      {selectionMode && (
+      {selectionMode && !showRevampInput && (
         <p className="text-sm text-zinc-500">
-          Select images from a single session to reuse that session's prompt, model, and aspect ratio, then click{' '}
-          <span className="text-violet-400">Revamp Selection</span> to generate improved variations.
+          Select images from a single session, then click{' '}
+          <span className="text-violet-400">Revamp Selection</span> to refine them with the current model.
+        </p>
+      )}
+
+      {selectionMode && showRevampInput && (
+        <p className="text-sm text-zinc-500">
+          Optionally describe how to refine the selected images, then click{' '}
+          <span className="text-violet-400">Confirm Revamp</span>. Leave the hint blank for a general improvement.
         </p>
       )}
 
