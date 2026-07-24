@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react'
-import type { FormEvent } from 'react'
+import type { ClipboardEvent, FormEvent } from 'react'
 import type { AspectRatio, GenerationParams } from '../types'
-import { fetchImageModels } from '../lib/openrouter'
+import { fetchImageModels, unsupportedAttachmentKinds } from '../lib/openrouter'
 import type { ImageModel } from '../lib/openrouter'
+import { AttachmentPicker } from './AttachmentPicker'
+import { ModelSelect } from './ModelSelect'
+import { useAttachments } from '../hooks/useAttachments'
+
+const KIND_LABELS = { image: 'images', pdf: 'PDFs', text: 'text documents' } as const
 
 const RATIOS: AspectRatio[] = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']
 
@@ -19,6 +24,7 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   const [loadingModels, setLoadingModels] = useState(true)
   const [modelsError, setModelsError] = useState<string | null>(null)
   const [model, setModel] = useState('')
+  const { attachments, errors: attachmentErrors, isReading, addFiles, removeAttachment } = useAttachments()
 
   useEffect(() => {
     fetchImageModels()
@@ -39,7 +45,18 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!prompt.trim() || isLoading || !model) return
-    onGenerate({ prompt: prompt.trim(), count, ratio, model })
+    onGenerate({ prompt: prompt.trim(), count, ratio, model, attachments })
+  }
+
+  const selectedModel = models.find((m) => m.id === model)
+  const unsupported = unsupportedAttachmentKinds(attachments, selectedModel)
+
+  /** Pasting a screenshot or file into the prompt attaches it instead of inserting text. */
+  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(e.clipboardData.files)
+    if (files.length === 0) return
+    e.preventDefault()
+    addFiles(files)
   }
 
   return (
@@ -50,35 +67,42 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
+          onPaste={handlePaste}
           placeholder="A cinematic photo of a futuristic city at night, neon reflections on wet streets..."
           rows={3}
           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 resize-none transition-colors"
         />
       </div>
 
+      {/* Attachments */}
+      <AttachmentPicker
+        attachments={attachments}
+        errors={attachmentErrors}
+        isReading={isReading}
+        disabled={isLoading}
+        onAddFiles={addFiles}
+        onRemove={removeAttachment}
+      />
+
+      {unsupported.length > 0 && (
+        <p className="text-xs text-amber-400 -mt-3">
+          {selectedModel?.label} does not accept {unsupported.map((k) => KIND_LABELS[k]).join(' or ')} as input. Pick a
+          model from the <span className="text-amber-300">Accepts image / PDF attachments</span> group, or remove those
+          attachments.
+        </p>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Model */}
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-2">Model</label>
-          {modelsError ? (
-            <p className="text-xs text-red-400 mt-1">{modelsError}</p>
-          ) : (
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={loadingModels}
-              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition-colors disabled:opacity-60"
-            >
-              {loadingModels && (
-                <option value="">Loading models…</option>
-              )}
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          )}
+          <ModelSelect
+            models={models}
+            value={model}
+            onChange={setModel}
+            loading={loadingModels}
+            error={modelsError}
+          />
         </div>
 
         {/* Count */}

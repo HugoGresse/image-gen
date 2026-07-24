@@ -209,6 +209,21 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
             <div className="flex items-start gap-3 text-xs text-zinc-500">
               <span className="bg-zinc-800 px-2 py-1 rounded font-mono">{session.params.model.split('/')[1]}</span>
               <span className="bg-zinc-800 px-2 py-1 rounded">{session.params.ratio}</span>
+              {session.params.attachments && session.params.attachments.length > 0 && (
+                <span
+                  className="bg-zinc-800 px-2 py-1 rounded flex items-center gap-1"
+                  title={session.params.attachments.map((a) => a.name).join(', ')}
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path
+                      d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {session.params.attachments.length}
+                </span>
+              )}
               <span className="truncate max-w-md">{session.params.prompt}</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

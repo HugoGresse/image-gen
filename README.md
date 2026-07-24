@@ -5,6 +5,7 @@ Frontend-only image generation dashboard built with Vite, React, and the OpenRou
 ## Features
 
 - Generate 1–8 images from a text prompt
+- Attach reference images and documents to the prompt (drag & drop, paste, or browse): images and PDFs are sent as multimodal parts, text documents (`.txt`, `.md`, `.csv`, `.json`, `.yaml`) are inlined as reference blocks
 - Choose the model and aspect ratio for each generation
 - Browse results by session in a gallery
 - Select images from a single session and create a revamped batch using that session's prompt, model, and aspect ratio

@@ -5,6 +5,7 @@ import { GenerationForm } from './components/GenerationForm'
 import { ImageGallery } from './components/ImageGallery'
 import { getStoredApiKey } from './lib/storage'
 import { generateImages, generateRevampedImages } from './lib/openrouter'
+import { stripAttachmentData } from './lib/attachments'
 import { trackEvent } from './lib/analytics'
 import type { GenerationParams, ImageSession, GeneratedImage } from './types'
 
@@ -43,16 +44,22 @@ export default function App() {
       }
       setIsLoading(true)
       setError(null)
-      trackEvent('generate_images', { count: params.count, ratio: params.ratio, model: params.model })
+      trackEvent('generate_images', {
+        count: params.count,
+        ratio: params.ratio,
+        model: params.model,
+        attachments: params.attachments?.length ?? 0,
+      })
 
       const sessionId = generateId()
       const now = Date.now()
-      const imagePromises = generateImages(apiKey, params.prompt, params.count, params.ratio, params.model)
+      const imagePromises = generateImages(apiKey, params)
 
-      // Create the session immediately with loading placeholders so images appear as they arrive
+      // Create the session immediately with loading placeholders so images appear as they arrive.
+      // Attachment payloads are dropped from the stored params — only metadata is kept for display.
       const newSession: ImageSession = {
         id: sessionId,
-        params,
+        params: { ...params, attachments: params.attachments?.map(stripAttachmentData) },
         createdAt: now,
         images: imagePromises.map(() => ({
           id: generateId(),
