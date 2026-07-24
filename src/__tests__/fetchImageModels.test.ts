@@ -15,10 +15,25 @@ const MOCK_MODELS = [
   {
     id: 'google/gemini-3-pro-image',
     name: 'Gemini 3 Pro Image',
+    description: 'Nano Banana Pro.',
+    created: 1781754054,
+    context_length: 131072,
+    pricing: { prompt: '0.000002', completion: '0.000012', image_output: '0.00012' },
     architecture: {
       modality: 'text+image->text+image',
       input_modalities: ['image', 'text'],
       output_modalities: ['image', 'text'],
+    },
+  },
+  // Auto router: variable pricing is reported as "-1"
+  {
+    id: 'openrouter/auto',
+    name: 'Auto Router',
+    pricing: { prompt: '-1', completion: '-1' },
+    architecture: {
+      modality: 'text+image+file->text+image',
+      input_modalities: ['text', 'image', 'file'],
+      output_modalities: ['text', 'image'],
     },
   },
   {
@@ -116,6 +131,30 @@ describe('fetchImageModels', () => {
     expect(gpt).toMatchObject({ supportsImageInput: true, supportsFileInput: true })
   })
 
+  it('maps pricing, context length, and release date', async () => {
+    const models = await fetchImageModels()
+    const gemini = models.find((m) => m.id === 'google/gemini-3-pro-image')
+    expect(gemini).toMatchObject({
+      imageOutputPrice: 0.00012,
+      promptPrice: 0.000002,
+      contextLength: 131072,
+      createdAt: 1781754054,
+      description: 'Nano Banana Pro.',
+    })
+  })
+
+  it('treats variable "-1" pricing as unpriced', async () => {
+    const models = await fetchImageModels()
+    const auto = models.find((m) => m.id === 'openrouter/auto')
+    expect(auto).toMatchObject({ promptPrice: null, imageOutputPrice: null })
+  })
+
+  it('leaves pricing and dates null when the entry omits them', async () => {
+    const models = await fetchImageModels()
+    const fluxPro = models.find((m) => m.id === 'black-forest-labs/flux-1.1-pro')
+    expect(fluxPro).toMatchObject({ imageOutputPrice: null, contextLength: null, createdAt: null })
+  })
+
   it('falls back to the modality string when arrays are absent', async () => {
     const models = await fetchImageModels()
     const fluxPro = models.find((m) => m.id === 'black-forest-labs/flux-1.1-pro')
@@ -135,8 +174,13 @@ describe('unsupportedAttachmentKinds', () => {
   const model = (overrides: Partial<ImageModel>): ImageModel => ({
     id: 'm',
     label: 'Model',
+    description: '',
     supportsImageInput: false,
     supportsFileInput: false,
+    imageOutputPrice: null,
+    promptPrice: null,
+    contextLength: null,
+    createdAt: null,
     ...overrides,
   })
   const attachment = (kind: Attachment['kind']): Attachment => ({

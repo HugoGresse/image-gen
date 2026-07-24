@@ -1,0 +1,68 @@
+import type { ImageModel } from './openrouter'
+
+const RECENT_DAYS = 60
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function formatUsd(amount: number): string {
+  if (amount >= 1) return `$${Number(amount.toFixed(2))}`
+  return `$${Number(amount.toPrecision(2))}`
+}
+
+/**
+ * Image output is billed per token by every current provider, so prices are shown
+ * per 1K image tokens — comparable across models without guessing tokens per image.
+ */
+export function formatImageOutputPrice(pricePerToken: number | null): string | null {
+  if (pricePerToken === null || pricePerToken === 0) return null
+  return `${formatUsd(pricePerToken * 1_000)}/1K img`
+}
+
+export function formatPromptPrice(pricePerToken: number | null): string | null {
+  if (pricePerToken === null || pricePerToken === 0) return null
+  return `${formatUsd(pricePerToken * 1_000_000)}/M in`
+}
+
+export function formatContextLength(tokens: number | null): string | null {
+  if (!tokens) return null
+  if (tokens >= 1_000_000) return `${Number((tokens / 1_000_000).toFixed(1))}M ctx`
+  return `${Math.round(tokens / 1_000)}K ctx`
+}
+
+export function formatReleaseDate(createdSeconds: number | null): string | null {
+  if (!createdSeconds) return null
+  const date = new Date(createdSeconds * 1_000)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(date)
+}
+
+/** Flags models released within the last two months so new options stand out. */
+export function isRecentRelease(createdSeconds: number | null, nowMs: number): boolean {
+  if (!createdSeconds) return false
+  const ageMs = nowMs - createdSeconds * 1_000
+  return ageMs >= 0 && ageMs < RECENT_DAYS * DAY_MS
+}
+
+/** Model descriptions are markdown; keep the first sentence as readable plain text. */
+export function summarizeDescription(description: string): string {
+  const plain = description
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/[*_`#>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const firstSentence = plain.match(/^.*?[.!?](?=\s|$)/)?.[0]
+  return firstSentence ?? plain
+}
+
+export function acceptsAttachments(model: ImageModel): boolean {
+  return model.supportsImageInput || model.supportsFileInput
+}
+
+/** Pricing, context, and release facts shown as a compact meta line, unknowns omitted. */
+export function modelMetaParts(model: ImageModel): string[] {
+  return [
+    formatImageOutputPrice(model.imageOutputPrice),
+    formatPromptPrice(model.promptPrice),
+    formatContextLength(model.contextLength),
+    formatReleaseDate(model.createdAt),
+  ].filter((part): part is string => part !== null)
+}

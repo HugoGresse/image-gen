@@ -6,20 +6,39 @@ const MAX_IMAGES_PER_REQUEST = 8
 export interface ImageModel {
   id: string
   label: string
+  description: string
   /** Accepts uploaded images as input (not just image output). */
   supportsImageInput: boolean
   /** Accepts PDF documents as input. */
   supportsFileInput: boolean
+  /** USD per image-output token; null when unpriced or variable (auto router). */
+  imageOutputPrice: number | null
+  /** USD per prompt token. */
+  promptPrice: number | null
+  contextLength: number | null
+  /** Release date as a unix timestamp in seconds. */
+  createdAt: number | null
 }
 
 interface OpenRouterModelEntry {
   id: string
   name: string
+  description?: string
+  created?: number
+  context_length?: number
+  pricing?: Record<string, string>
   architecture?: {
     modality?: string
     input_modalities?: string[]
     output_modalities?: string[]
   }
+}
+
+/** OpenRouter reports unknown or variable prices as "-1"; treat those as unpriced. */
+function parsePrice(raw: string | undefined): number | null {
+  if (raw === undefined) return null
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= 0 ? value : null
 }
 
 /** Newer entries expose modality arrays; older ones only the `input->output` string. */
@@ -51,8 +70,13 @@ export async function fetchImageModels(): Promise<ImageModel[]> {
       return {
         id: m.id,
         label: m.name,
+        description: m.description ?? '',
         supportsImageInput: inputs.some((mod) => mod.includes('image')),
         supportsFileInput: inputs.some((mod) => mod.includes('file')),
+        imageOutputPrice: parsePrice(m.pricing?.image_output),
+        promptPrice: parsePrice(m.pricing?.prompt),
+        contextLength: m.context_length ?? null,
+        createdAt: m.created ?? null,
       }
     })
 }
