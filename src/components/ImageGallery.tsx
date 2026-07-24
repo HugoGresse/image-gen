@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { GeneratedImage, ImageSession, GenerationParams } from '../types'
 import { ImageCard } from './ImageCard'
+import { ImageLightbox } from './ImageLightbox'
 
 interface ImageGalleryProps {
   sessions: ImageSession[]
@@ -13,6 +14,7 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showRevampInput, setShowRevampInput] = useState(false)
   const [revampHint, setRevampHint] = useState('')
+  const [viewer, setViewer] = useState<{ sessionId: string; index: number } | null>(null)
 
   const allImages = sessions.flatMap((s) =>
     s.images.map((img) => ({
@@ -24,6 +26,10 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
   )
   const selectedImages = allImages.filter((img) => img.selected)
   const selectedSessionId = selectedImages[0]?.sessionId ?? null
+
+  // The viewer walks the finished images of a single session.
+  const viewerImages =
+    sessions.find((s) => s.id === viewer?.sessionId)?.images.filter((img) => img.url && !img.loading) ?? []
 
   function toggleSelect(sessionId: string, id: string) {
     setSelected((prev) => {
@@ -204,7 +210,9 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
 
       {/* Sessions */}
       <div className="space-y-6">
-        {sessions.map((session) => (
+        {sessions.map((session) => {
+          const readyImages = session.images.filter((img) => img.url && !img.loading)
+          return (
           <div key={session.id} className="space-y-3">
             <div className="flex items-start gap-3 text-xs text-zinc-500">
               <span className="bg-zinc-800 px-2 py-1 rounded font-mono">{session.params.model.split('/')[1]}</span>
@@ -232,14 +240,30 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
                   key={image.id}
                   image={{ ...image, selected: selected.has(image.id) }}
                   onToggleSelect={() => toggleSelect(session.id, image.id)}
+                  onOpen={() =>
+                    setViewer({
+                      sessionId: session.id,
+                      index: Math.max(readyImages.findIndex((i) => i.id === image.id), 0),
+                    })
+                  }
                   selectionMode={selectionMode}
                   selectionDisabled={selectedSessionId !== null && selectedSessionId !== session.id}
                 />
               ))}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
+
+      {viewerImages.length > 0 && viewer && (
+        <ImageLightbox
+          images={viewerImages}
+          index={viewer.index}
+          onIndexChange={(index) => setViewer({ sessionId: viewer.sessionId, index })}
+          onClose={() => setViewer(null)}
+        />
+      )}
     </div>
   )
 }

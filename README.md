@@ -8,6 +8,7 @@ Frontend-only image generation dashboard built with Vite, React, and the OpenRou
 - Attach reference images and documents to the prompt (drag & drop, paste, or browse): images and PDFs are sent as multimodal parts, text documents (`.txt`, `.md`, `.csv`, `.json`, `.yaml`) are inlined as reference blocks
 - Choose the model and aspect ratio for each generation
 - Browse results by session in a gallery
+- Open any image in a fullscreen viewer: click a card, then use the slider, on-screen arrows, or the keyboard (`←`/`→`, `Home`/`End`, `F` for native fullscreen, `Esc` to close)
 - Select images from a single session and create a revamped batch using that session's prompt, model, and aspect ratio
 - Save your OpenRouter API key locally in the browser for convenience
 - Send lightweight analytics events to `plausible.gresse.io`

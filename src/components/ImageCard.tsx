@@ -3,17 +3,26 @@ import type { GeneratedImage } from '../types'
 interface ImageCardProps {
   image: GeneratedImage
   onToggleSelect: () => void
+  onOpen: () => void
   selectionMode: boolean
   selectionDisabled?: boolean
 }
 
-export function ImageCard({ image, onToggleSelect, selectionMode, selectionDisabled = false }: ImageCardProps) {
+export function ImageCard({ image, onToggleSelect, onOpen, selectionMode, selectionDisabled = false }: ImageCardProps) {
   const isLoading = image.loading
   const isFailed = !image.loading && !image.url
 
+  function handleClick() {
+    if (selectionMode) {
+      if (!selectionDisabled && !isLoading) onToggleSelect()
+    } else if (!isLoading && !isFailed) {
+      onOpen()
+    }
+  }
+
   return (
     <div
-      onClick={() => selectionMode && !selectionDisabled && !isLoading && onToggleSelect()}
+      onClick={handleClick}
       className={`relative group rounded-2xl overflow-hidden bg-zinc-800 cursor-pointer transition-all duration-200 ${
         selectionMode && !selectionDisabled && !isLoading ? 'hover:scale-[1.02]' : ''
       } ${
@@ -70,9 +79,19 @@ export function ImageCard({ image, onToggleSelect, selectionMode, selectionDisab
         </div>
       )}
 
-      {/* Download button (always visible on hover when not in selection mode) */}
+      {/* Open-fullscreen hint + download button on hover when not in selection mode */}
       {!selectionMode && !isLoading && !isFailed && (
-        <div className="absolute inset-0 flex items-end justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute inset-0 flex items-end justify-between p-3 gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-zinc-950/60 to-transparent">
+          <span className="bg-zinc-900/80 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path
+                d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            View
+          </span>
           <a
             href={image.url}
             download={`image-${image.id}.png`}
