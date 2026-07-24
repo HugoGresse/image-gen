@@ -119,6 +119,31 @@ export function buildUserContent(prompt: string, attachments: Attachment[] = [])
   return parts
 }
 
+interface ChatCompletionResponse {
+  choices?: {
+    message?: {
+      images?: { image_url?: { url?: string } }[]
+      content?: string | { type?: string; text?: string }[]
+    }
+  }[]
+}
+
+/**
+ * Pulls the generated image out of a chat completion. Models sometimes answer with
+ * text instead of an image, so the text is returned as well for the error message.
+ */
+export function extractImage(data: ChatCompletionResponse): { url: string | null; text: string } {
+  const message = data?.choices?.[0]?.message
+  const content = message?.content
+  const text = typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? content.filter((part) => part?.type === 'text').map((part) => part.text ?? '').join(' ')
+      : ''
+
+  return { url: message?.images?.[0]?.image_url?.url ?? null, text: text.trim() }
+}
+
 /** Single chat-completions call that returns one generated image URL. */
 async function requestImage(
   apiKey: string,
@@ -137,7 +162,9 @@ async function requestImage(
     body: JSON.stringify({
       model,
       messages: [{ role: 'user', content }],
-      modalities: ['image'],
+      // Both modalities are required: reasoning image models (OpenAI GPT-5 Image)
+      // answer with plain text and skip image output when only "image" is asked for.
+      modalities: ['image', 'text'],
       image_config: { aspect_ratio: ratio },
     }),
   })
@@ -149,10 +176,14 @@ async function requestImage(
     throw new Error(`OpenRouter error ${response.status}: ${snippet}${suffix}`)
   }
 
-  const data = await response.json()
-  const url: string | undefined = data?.choices?.[0]?.message?.images?.[0]?.image_url?.url
+  const { url, text } = extractImage(await response.json())
   if (!url) {
-    throw new Error('No image returned from OpenRouter. Please try again.')
+    const reply = text.length > 300 ? `${text.slice(0, 300)}…` : text
+    throw new Error(
+      reply
+        ? `${model} replied with text instead of an image: ${reply}`
+        : 'No image returned from OpenRouter. Please try again.'
+    )
   }
   return url
 }
