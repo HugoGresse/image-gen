@@ -7,9 +7,10 @@ interface ImageGalleryProps {
   sessions: ImageSession[]
   onRevamp: (selectedImages: GeneratedImage[], sourceParams: GenerationParams, refinementHint: string) => void
   isRevamping: boolean
+  onClearHistory: () => void
 }
 
-export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryProps) {
+export function ImageGallery({ sessions, onRevamp, isRevamping, onClearHistory }: ImageGalleryProps) {
   const [selectionMode, setSelectionMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [showRevampInput, setShowRevampInput] = useState(false)
@@ -97,6 +98,20 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
                   <path d="M14 17h7M17 14v7" strokeLinecap="round" />
                 </svg>
                 Select for Revamp
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('Delete every stored generation from this browser? This cannot be undone.')) {
+                    onClearHistory()
+                  }
+                }}
+                className="text-sm text-zinc-500 hover:text-red-400 border border-zinc-700 hover:border-red-500/50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2"
+                title="Delete the locally stored history"
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Clear history
               </button>
               {/* Revamp info tooltip */}
               <div className="relative group/revampinfo">

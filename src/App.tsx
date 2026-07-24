@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type React from 'react'
 import { ApiKeyInput } from './components/ApiKeyInput'
 import { GenerationForm } from './components/GenerationForm'
@@ -6,8 +6,12 @@ import { ImageGallery } from './components/ImageGallery'
 import { getStoredApiKey } from './lib/storage'
 import { generateImages, generateRevampedImages } from './lib/openrouter'
 import { stripAttachmentData } from './lib/attachments'
+import { pruneSessions } from './lib/history'
+import { clearSessions, loadSessions, saveSessions } from './lib/historyDb'
 import { trackEvent } from './lib/analytics'
 import type { GenerationParams, ImageSession, GeneratedImage } from './types'
+
+const HISTORY_SAVE_DELAY_MS = 800
 
 const REPO_URL = 'https://github.com/HugoGresse/image-gen'
 
@@ -37,6 +41,38 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [isRevamping, setIsRevamping] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Nothing may be written until stored history has been read, or the first
+  // render would overwrite it with an empty list.
+  const [isHistoryLoaded, setIsHistoryLoaded] = useState(false)
+
+  useEffect(() => {
+    loadSessions()
+      .then((stored) => {
+        if (stored.length > 0) setSessions(stored)
+      })
+      .catch(() => setError('Could not read the local history of past generations.'))
+      .finally(() => setIsHistoryLoaded(true))
+  }, [])
+
+  useEffect(() => {
+    if (!isHistoryLoaded) return
+    const timer = setTimeout(() => {
+      saveSessions(pruneSessions(sessions)).catch(() =>
+        setError('Could not save this generation to the local history.')
+      )
+    }, HISTORY_SAVE_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [sessions, isHistoryLoaded])
+
+  const handleClearHistory = useCallback(async () => {
+    setSessions([])
+    trackEvent('clear_history')
+    try {
+      await clearSessions()
+    } catch {
+      setError('Could not clear the local history.')
+    }
+  }, [])
 
   const handleGenerate = useCallback(
     async (params: GenerationParams) => {
@@ -211,6 +247,7 @@ export default function App() {
           sessions={sessions}
           onRevamp={handleRevamp}
           isRevamping={isRevamping}
+          onClearHistory={handleClearHistory}
         />
 
         {/* Empty state */}
@@ -231,7 +268,7 @@ export default function App() {
         <a href="https://openrouter.ai" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">
           OpenRouter
         </a>
-        {' '}· API key stored locally in your browser only ·{' '}
+        {' '}· API key and generation history stored locally in your browser only ·{' '}
         <a
           href={REPO_URL}
           target="_blank"
