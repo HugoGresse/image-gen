@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { extractImages, fetchImageModels, unsupportedAttachmentKinds } from '../lib/openrouter'
+import { extractCost, extractImages, fetchImageModels, sumCosts, unsupportedAttachmentKinds } from '../lib/openrouter'
 import type { Attachment, ImageModel } from '../types'
 
 // Sample of GET /api/v1/images/models
@@ -175,5 +175,25 @@ describe('unsupportedAttachmentKinds', () => {
 
   it('reports nothing while no model is selected yet', () => {
     expect(unsupportedAttachmentKinds([attachment('image')], undefined)).toEqual([])
+  })
+})
+
+describe('extractCost and sumCosts', () => {
+  it('reads the billed cost from the response usage block', () => {
+    expect(extractCost({ usage: { cost: 0.0421 } })).toBe(0.0421)
+  })
+
+  it('returns null when no cost is reported', () => {
+    expect(extractCost({})).toBeNull()
+    expect(extractCost({ usage: {} })).toBeNull()
+  })
+
+  it('sums only the requests that reported a cost', () => {
+    expect(sumCosts([0.01, null, 0.02])).toBeCloseTo(0.03)
+  })
+
+  it('returns null when nothing was reported', () => {
+    expect(sumCosts([null, null])).toBeNull()
+    expect(sumCosts([])).toBeNull()
   })
 })

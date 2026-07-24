@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react'
 import type React from 'react'
 import { ApiKeyInput } from './components/ApiKeyInput'
+import { CreditsBadge } from './components/CreditsBadge'
+import { useCredits } from './hooks/useCredits'
 import { GenerationForm } from './components/GenerationForm'
 import { ImageGallery } from './components/ImageGallery'
 import { getStoredApiKey } from './lib/storage'
@@ -44,6 +46,7 @@ export default function App() {
   // Nothing may be written until stored history has been read, or the first
   // render would overwrite it with an empty list.
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false)
+  const { credits, isLoading: isLoadingCredits, error: creditsError, refresh: refreshCredits } = useCredits(apiKey)
 
   useEffect(() => {
     loadSessions()
@@ -63,6 +66,16 @@ export default function App() {
     }, HISTORY_SAVE_DELAY_MS)
     return () => clearTimeout(timer)
   }, [sessions, isHistoryLoaded])
+
+  /** Stamps the session with what OpenRouter billed once every request settled. */
+  const trackSessionCost = useCallback((sessionId: string, cost: Promise<number | null>) => {
+    cost
+      .then((total) => {
+        if (total === null) return
+        setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, cost: total } : s)))
+      })
+      .catch(() => undefined)
+  }, [])
 
   const handleClearHistory = useCallback(async () => {
     setSessions([])
@@ -91,7 +104,8 @@ export default function App() {
 
       const sessionId = generateId()
       const now = Date.now()
-      const imagePromises = generateImages(apiKey, params)
+      const { images: imagePromises, cost } = generateImages(apiKey, params)
+      trackSessionCost(sessionId, cost)
 
       // Create the session immediately with loading placeholders so images appear as they arrive.
       // Attachment payloads are dropped from the stored params — only metadata is kept for display.
@@ -130,8 +144,9 @@ export default function App() {
         trackEvent('generate_error')
       }
       setIsLoading(false)
+      refreshCredits()
     },
-    [apiKey]
+    [apiKey, refreshCredits, trackSessionCost]
   )
 
   const handleRevamp = useCallback(
@@ -147,7 +162,8 @@ export default function App() {
 
       const sessionId = generateId()
       const now = Date.now()
-      const imagePromises = generateRevampedImages(apiKey, imageUrls, refinementHint, ratio, model)
+      const { images: imagePromises, cost } = generateRevampedImages(apiKey, imageUrls, refinementHint, ratio, model)
+      trackSessionCost(sessionId, cost)
 
       // Create the session immediately with loading placeholders
       const newSession: ImageSession = {
@@ -190,8 +206,9 @@ export default function App() {
         trackEvent('revamp_error')
       }
       setIsRevamping(false)
+      refreshCredits()
     },
-    [apiKey]
+    [apiKey, refreshCredits, trackSessionCost]
   )
 
   return (
@@ -204,7 +221,15 @@ export default function App() {
             <h1 className="text-lg font-bold tracking-tight">Image Gen</h1>
             <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">OpenRouter</span>
           </div>
-          <ApiKeyInput apiKey={apiKey} onApiKeyChange={setApiKey} />
+          <div className="flex items-center gap-3 flex-wrap">
+            <CreditsBadge
+              credits={credits}
+              isLoading={isLoadingCredits}
+              error={creditsError}
+              onRefresh={refreshCredits}
+            />
+            <ApiKeyInput apiKey={apiKey} onApiKeyChange={setApiKey} />
+          </div>
         </div>
       </header>
 

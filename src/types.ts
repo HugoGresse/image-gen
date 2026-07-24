@@ -59,4 +59,6 @@ export interface ImageSession {
   params: GenerationParams
   images: GeneratedImage[]
   createdAt: number
+  /** Billed cost reported by OpenRouter once the batch settled; null when unreported. */
+  cost?: number | null
 }

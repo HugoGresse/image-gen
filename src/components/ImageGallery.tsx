@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { GeneratedImage, ImageSession, GenerationParams } from '../types'
 import { ImageCard } from './ImageCard'
 import { ImageLightbox } from './ImageLightbox'
+import { formatCost } from '../lib/money'
 
 interface ImageGalleryProps {
   sessions: ImageSession[]
@@ -245,6 +246,11 @@ export function ImageGallery({ sessions, onRevamp, isRevamping, onClearHistory }
                     />
                   </svg>
                   {session.params.attachments.length}
+                </span>
+              )}
+              {formatCost(session.cost) && (
+                <span className="bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded font-mono" title="Billed by OpenRouter for this generation">
+                  {formatCost(session.cost)}
                 </span>
               )}
               <span className="truncate max-w-md">{session.params.prompt}</span>

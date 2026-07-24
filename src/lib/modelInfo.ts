@@ -1,12 +1,8 @@
 import type { ImageModel } from '../types'
+import { formatUsd } from './money'
 
 const RECENT_DAYS = 60
 const DAY_MS = 24 * 60 * 60 * 1000
-
-function formatUsd(amount: number): string {
-  if (amount >= 1) return `$${Number(amount.toFixed(2))}`
-  return `$${Number(amount.toPrecision(2))}`
-}
 
 /**
  * Image output is billed per token, so prices are shown per 1K image tokens —

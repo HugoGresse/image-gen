@@ -111,6 +111,25 @@ export function extractImages(payload: { data?: ImagesResponseEntry[] }): string
     .filter(Boolean)
 }
 
+/** What the request actually cost, as billed by OpenRouter; null when not reported. */
+export function extractCost(payload: { usage?: { cost?: number } }): number | null {
+  const cost = payload?.usage?.cost
+  return typeof cost === 'number' && Number.isFinite(cost) ? cost : null
+}
+
+/** Sums what was reported, ignoring failed or unpriced requests. */
+export function sumCosts(costs: (number | null)[]): number | null {
+  const reported = costs.filter((cost): cost is number => cost !== null)
+  return reported.length > 0 ? reported.reduce((total, cost) => total + cost, 0) : null
+}
+
+export interface Generation {
+  /** One promise per image, resolving as each arrives. */
+  images: Promise<string>[]
+  /** Total billed cost once every request has settled. */
+  cost: Promise<number | null>
+}
+
 interface ImageRequest {
   model: ImageModel
   prompt: string
@@ -119,7 +138,12 @@ interface ImageRequest {
   inputReferences: ReturnType<typeof buildInputReferences>
 }
 
-async function requestImages(apiKey: string, request: ImageRequest): Promise<string[]> {
+interface ImagesResult {
+  images: string[]
+  cost: number | null
+}
+
+async function requestImages(apiKey: string, request: ImageRequest): Promise<ImagesResult> {
   const aspectRatio = resolveAspectRatio(request.model, request.ratio)
 
   const response = await fetch(`${OPENROUTER_BASE_URL}/images`, {
@@ -146,21 +170,29 @@ async function requestImages(apiKey: string, request: ImageRequest): Promise<str
     throw new Error(`OpenRouter error ${response.status}: ${snippet}${suffix}`)
   }
 
-  const images = extractImages(await response.json())
+  const payload = await response.json()
+  const images = extractImages(payload)
   if (images.length === 0) {
     throw new Error('No image returned from OpenRouter. Please try again.')
   }
-  return images
+  return { images, cost: extractCost(payload) }
 }
 
 /** Splits one batch response into a promise per image slot. */
-function spread(batch: Promise<string[]>, size: number): Promise<string>[] {
+function spread(batch: Promise<ImagesResult>, size: number): Promise<string>[] {
   return Array.from({ length: size }, (_, index) =>
-    batch.then((images) => {
-      const url = images[index]
+    batch.then((result) => {
+      const url = result.images[index]
       if (!url) throw new Error('OpenRouter returned fewer images than requested.')
       return url
     })
+  )
+}
+
+/** Total cost of a set of requests; failures contribute nothing rather than rejecting. */
+function totalCost(requests: Promise<ImagesResult>[]): Promise<number | null> {
+  return Promise.allSettled(requests).then((results) =>
+    sumCosts(results.map((result) => (result.status === 'fulfilled' ? result.value.cost : null)))
   )
 }
 
@@ -170,15 +202,21 @@ function spread(batch: Promise<string[]>, size: number): Promise<string>[] {
  * of images the model returns per call, and attachments ride along as the prompt
  * text (documents) and input references (images).
  */
-export function generateImages(apiKey: string, params: GenerationParams): Promise<string>[] {
+export function generateImages(apiKey: string, params: GenerationParams): Generation {
   const { model } = params
   const count = Math.min(Math.max(params.count, 1), MAX_IMAGES_PER_REQUEST)
   const prompt = buildPrompt(params.prompt, params.attachments)
   const inputReferences = buildInputReferences(params.attachments, model.maxReferenceImages)
 
-  return planBatches(count, model.maxImagesPerRequest).flatMap((size) =>
-    spread(requestImages(apiKey, { model, prompt, ratio: params.ratio, n: size, inputReferences }), size)
-  )
+  const batches = planBatches(count, model.maxImagesPerRequest).map((size) => ({
+    size,
+    request: requestImages(apiKey, { model, prompt, ratio: params.ratio, n: size, inputReferences }),
+  }))
+
+  return {
+    images: batches.flatMap(({ request, size }) => spread(request, size)),
+    cost: totalCost(batches.map(({ request }) => request)),
+  }
 }
 
 /**
@@ -191,18 +229,23 @@ export function generateRevampedImages(
   refinementHint: string,
   ratio: string,
   model: ImageModel
-): Promise<string>[] {
+): Generation {
   const prompt = refinementHint.trim()
     ? refinementHint.trim()
     : 'Refine and improve this image, enhancing detail, composition, and visual quality.'
 
-  return imageUrls.map((url) =>
+  const requests = imageUrls.map((url) =>
     requestImages(apiKey, {
       model,
       prompt,
       ratio,
       n: 1,
       inputReferences: [{ type: 'image_url', image_url: { url } }],
-    }).then((images) => images[0])
+    })
   )
+
+  return {
+    images: requests.map((request) => request.then((result) => result.images[0])),
+    cost: totalCost(requests),
+  }
 }

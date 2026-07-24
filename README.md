@@ -11,6 +11,7 @@ Frontend-only image generation dashboard built with Vite, React, and the OpenRou
 - Browse results by session in a gallery
 - Open any image in a fullscreen viewer: click a card, then use the slider, on-screen arrows, or the keyboard (`←`/`→`, `Home`/`End`, `F` for native fullscreen, `Esc` to close)
 - Select images from a single session and create a revamped batch using that session's prompt, model, and aspect ratio
+- See the API key's remaining credit in the header (refreshed after each generation) and what OpenRouter billed for each generation in the gallery
 - Past generations (prompts, settings, and images) are kept in the browser via IndexedDB and restored on the next visit — the 30 most recent sessions, clearable from the gallery header
 - Save your OpenRouter API key locally in the browser for convenience
 - Send lightweight analytics events to `plausible.gresse.io`
