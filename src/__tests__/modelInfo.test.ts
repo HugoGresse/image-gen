@@ -1,28 +1,29 @@
 import { describe, it, expect } from 'vitest'
 import {
-  formatContextLength,
+  acceptsReferenceImages,
+  formatBatchSize,
   formatImageOutputPrice,
-  formatPromptPrice,
+  formatReferenceSupport,
   formatReleaseDate,
   isRecentRelease,
   modelMetaParts,
   summarizeDescription,
 } from '../lib/modelInfo'
-import type { ImageModel } from '../lib/openrouter'
+import type { ImageModel } from '../types'
 
 const JUNE_2026 = Date.UTC(2026, 5, 15) / 1_000
 
 function model(overrides: Partial<ImageModel> = {}): ImageModel {
   return {
-    id: 'google/gemini-3-pro-image',
-    label: 'Gemini 3 Pro Image',
+    id: 'bytedance-seed/seedream-4.5',
+    label: 'Seedream 4.5',
     description: '',
-    supportsImageInput: true,
-    supportsFileInput: false,
-    imageOutputPrice: 0.00012,
-    promptPrice: 0.000002,
-    contextLength: 131072,
     createdAt: JUNE_2026,
+    aspectRatios: ['1:1', '16:9'],
+    resolutions: ['1K', '2K', '4K'],
+    maxImagesPerRequest: 10,
+    maxReferenceImages: 14,
+    imageOutputPrice: 0.00003,
     ...overrides,
   }
 }
@@ -40,28 +41,25 @@ describe('formatImageOutputPrice', () => {
   })
 })
 
-describe('formatPromptPrice', () => {
-  it('prices prompt tokens per million', () => {
-    expect(formatPromptPrice(0.000002)).toBe('$2/M in')
-    expect(formatPromptPrice(0.00000025)).toBe('$0.25/M in')
-    expect(formatPromptPrice(0.00001)).toBe('$10/M in')
-  })
-
-  it('returns null when the price is unknown', () => {
-    expect(formatPromptPrice(null)).toBeNull()
+describe('formatBatchSize', () => {
+  it('describes how many images one request returns', () => {
+    expect(formatBatchSize(10)).toBe('10/request')
+    expect(formatBatchSize(1)).toBe('1/request')
   })
 })
 
-describe('formatContextLength', () => {
-  it('formats thousands and millions', () => {
-    expect(formatContextLength(131072)).toBe('131K ctx')
-    expect(formatContextLength(32768)).toBe('33K ctx')
-    expect(formatContextLength(2_000_000)).toBe('2M ctx')
+describe('formatReferenceSupport', () => {
+  it('describes reference image support', () => {
+    expect(formatReferenceSupport(0)).toBe('No reference images')
+    expect(formatReferenceSupport(1)).toBe('1 reference image')
+    expect(formatReferenceSupport(14)).toBe('Up to 14 references')
   })
+})
 
-  it('returns null when missing', () => {
-    expect(formatContextLength(null)).toBeNull()
-    expect(formatContextLength(0)).toBeNull()
+describe('acceptsReferenceImages', () => {
+  it('is true only when the model takes at least one reference', () => {
+    expect(acceptsReferenceImages(model())).toBe(true)
+    expect(acceptsReferenceImages(model({ maxReferenceImages: 0 }))).toBe(false)
   })
 })
 
@@ -108,12 +106,12 @@ describe('summarizeDescription', () => {
 })
 
 describe('modelMetaParts', () => {
-  it('lists price, context, and release facts', () => {
-    expect(modelMetaParts(model())).toEqual(['$0.12/1K img', '$2/M in', '131K ctx', 'Jun 2026'])
+  it('lists price, batch size, resolutions, and release date', () => {
+    expect(modelMetaParts(model())).toEqual(['$0.03/1K img', '10/request', '1K/2K/4K', 'Jun 2026'])
   })
 
   it('omits unknown facts instead of showing placeholders', () => {
-    const sparse = model({ imageOutputPrice: null, promptPrice: null, contextLength: null })
-    expect(modelMetaParts(sparse)).toEqual(['Jun 2026'])
+    const sparse = model({ imageOutputPrice: null, resolutions: null, createdAt: null })
+    expect(modelMetaParts(sparse)).toEqual(['10/request'])
   })
 })

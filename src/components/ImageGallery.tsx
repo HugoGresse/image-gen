@@ -207,7 +207,7 @@ export function ImageGallery({ sessions, onRevamp, isRevamping }: ImageGalleryPr
         {sessions.map((session) => (
           <div key={session.id} className="space-y-3">
             <div className="flex items-start gap-3 text-xs text-zinc-500">
-              <span className="bg-zinc-800 px-2 py-1 rounded font-mono">{session.params.model.split('/')[1]}</span>
+              <span className="bg-zinc-800 px-2 py-1 rounded font-mono">{session.params.model.label}</span>
               <span className="bg-zinc-800 px-2 py-1 rounded">{session.params.ratio}</span>
               {session.params.attachments && session.params.attachments.length > 0 && (
                 <span

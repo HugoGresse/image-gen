@@ -70,8 +70,8 @@ export function AttachmentPicker({
       >
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <p className="text-xs text-zinc-500">
-            Drop, paste, or browse images and reference documents (PDF, txt, md, csv, json) — sent to the model with
-            your prompt.
+            Drop, paste, or browse reference images and text documents (txt, md, csv, json) — images are sent as
+            references, documents are inlined into the prompt.
           </p>
           <button
             type="button"

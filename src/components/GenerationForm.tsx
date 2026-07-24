@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react'
 import type { ClipboardEvent, FormEvent } from 'react'
-import type { AspectRatio, GenerationParams } from '../types'
+import type { AspectRatio, GenerationParams, ImageModel } from '../types'
+import { FALLBACK_RATIOS } from '../types'
 import { fetchImageModels, unsupportedAttachmentKinds } from '../lib/openrouter'
-import type { ImageModel } from '../lib/openrouter'
+import { formatReferenceSupport } from '../lib/modelInfo'
+import { planBatches } from '../lib/imageRequest'
 import { AttachmentPicker } from './AttachmentPicker'
 import { ModelSelect } from './ModelSelect'
 import { useAttachments } from '../hooks/useAttachments'
-
-const KIND_LABELS = { image: 'images', pdf: 'PDFs', text: 'text documents' } as const
-
-const RATIOS: AspectRatio[] = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3']
 
 interface GenerationFormProps {
   onGenerate: (params: GenerationParams) => void
@@ -42,14 +40,18 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
       .finally(() => setLoadingModels(false))
   }, [])
 
+  const selectedModel = models.find((m) => m.id === model)
+  const ratios = selectedModel?.aspectRatios ?? (selectedModel ? null : FALLBACK_RATIOS)
+  const unsupported = unsupportedAttachmentKinds(attachments, selectedModel)
+  const requestCount = selectedModel ? planBatches(count, selectedModel.maxImagesPerRequest).length : 1
+  // Ratios are declared per model, so fall back to one the selected model accepts.
+  const effectiveRatio = ratios && ratios.length > 0 && !ratios.includes(ratio) ? ratios[0] : ratio
+
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!prompt.trim() || isLoading || !model) return
-    onGenerate({ prompt: prompt.trim(), count, ratio, model, attachments })
+    if (!prompt.trim() || isLoading || !selectedModel) return
+    onGenerate({ prompt: prompt.trim(), count, ratio: effectiveRatio, model: selectedModel, attachments })
   }
-
-  const selectedModel = models.find((m) => m.id === model)
-  const unsupported = unsupportedAttachmentKinds(attachments, selectedModel)
 
   /** Pasting a screenshot or file into the prompt attaches it instead of inserting text. */
   function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
@@ -86,9 +88,13 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
 
       {unsupported.length > 0 && (
         <p className="text-xs text-amber-400 -mt-3">
-          {selectedModel?.label} does not accept {unsupported.map((k) => KIND_LABELS[k]).join(' or ')} as input. Pick a
-          model from the <span className="text-amber-300">Accepts image / PDF attachments</span> group, or remove those
-          attachments.
+          {unsupported.includes('pdf') && 'PDFs cannot be sent to the image API — attach a text document instead. '}
+          {unsupported.includes('image') && (
+            <>
+              {selectedModel?.label} takes no reference images. Pick a model from the{' '}
+              <span className="text-amber-300">Accepts reference images</span> group, or remove them.
+            </>
+          )}
         </p>
       )}
 
@@ -122,27 +128,39 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
             <span>1</span>
             <span>8</span>
           </div>
+          {selectedModel && (
+            <p className="text-[11px] text-zinc-600 mt-1">
+              {requestCount === 1 ? '1 request' : `${requestCount} requests`} ·{' '}
+              {formatReferenceSupport(selectedModel.maxReferenceImages).toLowerCase()}
+            </p>
+          )}
         </div>
 
         {/* Ratio */}
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-2">Aspect Ratio</label>
-          <div className="flex flex-wrap gap-1.5">
-            {RATIOS.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRatio(r)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-colors ${
-                  ratio === r
-                    ? 'bg-violet-600 text-white'
-                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-violet-500 hover:text-violet-400'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
+          {ratios ? (
+            <div className="flex flex-wrap gap-1.5">
+              {ratios.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRatio(r)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-colors ${
+                    effectiveRatio === r
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-violet-500 hover:text-violet-400'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-500 mt-2">
+              {selectedModel?.label} does not expose an aspect ratio — the provider default is used.
+            </p>
+          )}
         </div>
       </div>
 

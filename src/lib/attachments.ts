@@ -7,7 +7,11 @@ export const MAX_TEXT_CHARS = 20_000
 
 const TEXT_EXTENSIONS = ['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.yaml', '.yml']
 
-export const ACCEPTED_FILE_TYPES = `image/*,application/pdf,${TEXT_EXTENSIONS.join(',')}`
+/**
+ * PDFs are deliberately absent: the Images API takes reference images and a text
+ * prompt only. Dropped PDFs are still recognised so the form can explain why.
+ */
+export const ACCEPTED_FILE_TYPES = `image/*,${TEXT_EXTENSIONS.join(',')}`
 
 function hasTextExtension(name: string): boolean {
   const lower = name.toLowerCase()

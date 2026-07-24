@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import type { ImageModel } from '../lib/openrouter'
-import { acceptsAttachments, isRecentRelease, modelMetaParts, summarizeDescription } from '../lib/modelInfo'
+import type { ImageModel } from '../types'
+import { acceptsReferenceImages, isRecentRelease, modelMetaParts, summarizeDescription } from '../lib/modelInfo'
 import { CapabilityBadges } from './ModelCapabilities'
 
 interface ModelSelectProps {
@@ -24,8 +24,8 @@ function buildSections(models: ImageModel[], query: string): Section[] {
     (m) => !needle || m.label.toLowerCase().includes(needle) || m.id.toLowerCase().includes(needle)
   )
   const groups = [
-    { title: 'Accepts image / PDF attachments', models: matches.filter(acceptsAttachments) },
-    { title: 'Text prompt only', models: matches.filter((m) => !acceptsAttachments(m)) },
+    { title: 'Accepts reference images', models: matches.filter(acceptsReferenceImages) },
+    { title: 'Text prompt only', models: matches.filter((m) => !acceptsReferenceImages(m)) },
   ].filter((group) => group.models.length > 0)
 
   let index = 0
