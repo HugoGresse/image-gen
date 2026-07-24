@@ -1,172 +1,137 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fetchImageModels, unsupportedAttachmentKinds } from '../lib/openrouter'
-import type { ImageModel } from '../lib/openrouter'
-import type { Attachment } from '../types'
+import { extractImages, fetchImageModels, unsupportedAttachmentKinds } from '../lib/openrouter'
+import type { Attachment, ImageModel } from '../types'
 
-// Realistic sample of models as returned by GET /api/v1/models
-const MOCK_MODELS = [
-  // Image generation models (text -> image)
+// Sample of GET /api/v1/images/models
+const IMAGE_MODELS = [
   {
-    id: 'black-forest-labs/flux-1.1-pro',
-    name: 'FLUX 1.1 Pro',
-    architecture: { modality: 'text->image' },
-  },
-  // Multimodal image models, described with the newer modality arrays
-  {
-    id: 'google/gemini-3-pro-image',
-    name: 'Gemini 3 Pro Image',
-    description: 'Nano Banana Pro.',
-    created: 1781754054,
-    context_length: 131072,
-    pricing: { prompt: '0.000002', completion: '0.000012', image_output: '0.00012' },
-    architecture: {
-      modality: 'text+image->text+image',
-      input_modalities: ['image', 'text'],
-      output_modalities: ['image', 'text'],
+    id: 'bytedance-seed/seedream-4.5',
+    name: 'Seedream 4.5',
+    description: 'ByteDance image model.',
+    created: 1_770_000_000,
+    supported_parameters: {
+      resolution: { type: 'enum', values: ['1K', '2K', '4K'] },
+      aspect_ratio: { type: 'enum', values: ['1:1', '16:9', '9:16'] },
+      n: { type: 'range', min: 1, max: 10 },
+      input_references: { type: 'range', min: 0, max: 14 },
     },
   },
-  // Auto router: variable pricing is reported as "-1"
+  {
+    // No aspect_ratio and no input_references: parameters must come back null / 0
+    id: 'black-forest-labs/flux.2-pro',
+    name: 'FLUX.2 Pro',
+    supported_parameters: {
+      n: { type: 'range', min: 1, max: 1 },
+      input_references: { type: 'range', min: 0, max: 8 },
+    },
+  },
   {
     id: 'openrouter/auto',
     name: 'Auto Router',
-    pricing: { prompt: '-1', completion: '-1' },
-    architecture: {
-      modality: 'text+image+file->text+image',
-      input_modalities: ['text', 'image', 'file'],
-      output_modalities: ['text', 'image'],
-    },
-  },
-  {
-    id: 'openai/gpt-5-image',
-    name: 'GPT-5 Image',
-    architecture: {
-      modality: 'text+image+file->text+image',
-      input_modalities: ['image', 'text', 'file'],
-      output_modalities: ['image', 'text'],
-    },
-  },
-  {
-    id: 'black-forest-labs/flux-schnell',
-    name: 'FLUX Schnell',
-    architecture: { modality: 'text->image' },
-  },
-  {
-    id: 'openai/dall-e-3',
-    name: 'DALL·E 3',
-    architecture: { modality: 'text->image' },
-  },
-  {
-    id: 'recraft-ai/recraft-v3',
-    name: 'Recraft V3',
-    architecture: { modality: 'text->image' },
-  },
-  // Text-only models — must be excluded
-  {
-    id: 'openai/gpt-4o',
-    name: 'GPT-4o',
-    architecture: { modality: 'text+image->text' },
-  },
-  {
-    id: 'anthropic/claude-3.5-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    architecture: { modality: 'text+image->text' },
-  },
-  {
-    id: 'meta-llama/llama-3.1-70b-instruct',
-    name: 'Llama 3.1 70B',
-    architecture: { modality: 'text->text' },
-  },
-  // Model with no architecture info — must be excluded
-  {
-    id: 'some/unknown-model',
-    name: 'Unknown Model',
+    supported_parameters: {},
   },
 ]
 
-beforeEach(() => {
+// Sample of GET /api/v1/models?output_modalities=image, used only for pricing
+const PRICED_MODELS = [
+  { id: 'bytedance-seed/seedream-4.5', pricing: { image_output: '0.00003' } },
+  { id: 'openrouter/auto', pricing: { prompt: '-1', image_output: '-1' } },
+]
+
+function stubFetch(imageModels: unknown = IMAGE_MODELS, priced: unknown = PRICED_MODELS) {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: MOCK_MODELS }),
-    }),
+    vi.fn().mockImplementation((url: string) =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ data: url.includes('/images/models') ? imageModels : priced }),
+      })
+    )
   )
-})
+}
+
+beforeEach(() => stubFetch())
 
 describe('fetchImageModels', () => {
-  it('returns only models whose output modality includes image', async () => {
+  it('reads every model exposed by the Images API', async () => {
     const models = await fetchImageModels()
-    const ids = models.map((m) => m.id)
-    expect(ids).toContain('black-forest-labs/flux-1.1-pro')
-    expect(ids).toContain('black-forest-labs/flux-schnell')
-    expect(ids).toContain('openai/dall-e-3')
-    expect(ids).toContain('recraft-ai/recraft-v3')
+    expect(models.map((m) => m.id)).toEqual([
+      'bytedance-seed/seedream-4.5',
+      'black-forest-labs/flux.2-pro',
+      'openrouter/auto',
+    ])
   })
 
-  it('excludes text-only and vision (text input only) models', async () => {
-    const models = await fetchImageModels()
-    const ids = models.map((m) => m.id)
-    expect(ids).not.toContain('openai/gpt-4o')
-    expect(ids).not.toContain('anthropic/claude-3.5-sonnet')
-    expect(ids).not.toContain('meta-llama/llama-3.1-70b-instruct')
-  })
-
-  it('excludes models with no architecture metadata', async () => {
-    const models = await fetchImageModels()
-    const ids = models.map((m) => m.id)
-    expect(ids).not.toContain('some/unknown-model')
-  })
-
-  it('maps API name field to the label property', async () => {
-    const models = await fetchImageModels()
-    const fluxPro = models.find((m) => m.id === 'black-forest-labs/flux-1.1-pro')
-    expect(fluxPro?.label).toBe('FLUX 1.1 Pro')
-  })
-
-  it('flags image and PDF input support from the modality arrays', async () => {
-    const models = await fetchImageModels()
-    const gemini = models.find((m) => m.id === 'google/gemini-3-pro-image')
-    const gpt = models.find((m) => m.id === 'openai/gpt-5-image')
-    expect(gemini).toMatchObject({ supportsImageInput: true, supportsFileInput: false })
-    expect(gpt).toMatchObject({ supportsImageInput: true, supportsFileInput: true })
-  })
-
-  it('maps pricing, context length, and release date', async () => {
-    const models = await fetchImageModels()
-    const gemini = models.find((m) => m.id === 'google/gemini-3-pro-image')
-    expect(gemini).toMatchObject({
-      imageOutputPrice: 0.00012,
-      promptPrice: 0.000002,
-      contextLength: 131072,
-      createdAt: 1781754054,
-      description: 'Nano Banana Pro.',
+  it('maps the per-model limits used to build requests', async () => {
+    const [seedream] = await fetchImageModels()
+    expect(seedream).toMatchObject({
+      label: 'Seedream 4.5',
+      aspectRatios: ['1:1', '16:9', '9:16'],
+      resolutions: ['1K', '2K', '4K'],
+      maxImagesPerRequest: 10,
+      maxReferenceImages: 14,
+      createdAt: 1_770_000_000,
     })
   })
 
-  it('treats variable "-1" pricing as unpriced', async () => {
+  it('defaults missing parameters: no ratios, one image per request, no references', async () => {
     const models = await fetchImageModels()
-    const auto = models.find((m) => m.id === 'openrouter/auto')
-    expect(auto).toMatchObject({ promptPrice: null, imageOutputPrice: null })
+    expect(models.find((m) => m.id === 'black-forest-labs/flux.2-pro')).toMatchObject({
+      aspectRatios: null,
+      maxImagesPerRequest: 1,
+      maxReferenceImages: 8,
+    })
+    expect(models.find((m) => m.id === 'openrouter/auto')).toMatchObject({
+      aspectRatios: null,
+      maxImagesPerRequest: 1,
+      maxReferenceImages: 0,
+    })
   })
 
-  it('leaves pricing and dates null when the entry omits them', async () => {
+  it('merges pricing and treats variable "-1" pricing as unpriced', async () => {
     const models = await fetchImageModels()
-    const fluxPro = models.find((m) => m.id === 'black-forest-labs/flux-1.1-pro')
-    expect(fluxPro).toMatchObject({ imageOutputPrice: null, contextLength: null, createdAt: null })
+    expect(models.find((m) => m.id === 'bytedance-seed/seedream-4.5')?.imageOutputPrice).toBe(0.00003)
+    expect(models.find((m) => m.id === 'openrouter/auto')?.imageOutputPrice).toBeNull()
+    expect(models.find((m) => m.id === 'black-forest-labs/flux.2-pro')?.imageOutputPrice).toBeNull()
   })
 
-  it('falls back to the modality string when arrays are absent', async () => {
-    const models = await fetchImageModels()
-    const fluxPro = models.find((m) => m.id === 'black-forest-labs/flux-1.1-pro')
-    expect(fluxPro).toMatchObject({ supportsImageInput: false, supportsFileInput: false })
-  })
-
-  it('throws when the API responds with an error status', async () => {
+  it('still returns models when the pricing endpoint fails', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ ok: false, status: 500 }),
+      vi.fn().mockImplementation((url: string) =>
+        url.includes('/images/models')
+          ? Promise.resolve({ ok: true, json: () => Promise.resolve({ data: IMAGE_MODELS }) })
+          : Promise.resolve({ ok: false, status: 500 })
+      )
     )
+    const models = await fetchImageModels()
+    expect(models).toHaveLength(3)
+    expect(models[0].imageOutputPrice).toBeNull()
+  })
+
+  it('throws when the model catalogue responds with an error status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
     await expect(fetchImageModels()).rejects.toThrow('Failed to fetch models: 500')
+  })
+})
+
+describe('extractImages', () => {
+  it('builds data URLs from base64 entries', () => {
+    const urls = extractImages({ data: [{ b64_json: 'AAAA', media_type: 'image/webp' }] })
+    expect(urls).toEqual(['data:image/webp;base64,AAAA'])
+  })
+
+  it('defaults the media type to png', () => {
+    expect(extractImages({ data: [{ b64_json: 'AAAA' }] })).toEqual(['data:image/png;base64,AAAA'])
+  })
+
+  it('passes through hosted urls and skips empty entries', () => {
+    const urls = extractImages({ data: [{ url: 'https://cdn.example/img.png' }, {}] })
+    expect(urls).toEqual(['https://cdn.example/img.png'])
+  })
+
+  it('handles a malformed payload', () => {
+    expect(extractImages({})).toEqual([])
   })
 })
 
@@ -175,12 +140,12 @@ describe('unsupportedAttachmentKinds', () => {
     id: 'm',
     label: 'Model',
     description: '',
-    supportsImageInput: false,
-    supportsFileInput: false,
-    imageOutputPrice: null,
-    promptPrice: null,
-    contextLength: null,
     createdAt: null,
+    aspectRatios: null,
+    resolutions: null,
+    maxImagesPerRequest: 1,
+    maxReferenceImages: 0,
+    imageOutputPrice: null,
     ...overrides,
   })
   const attachment = (kind: Attachment['kind']): Attachment => ({
@@ -192,14 +157,16 @@ describe('unsupportedAttachmentKinds', () => {
     data: '',
   })
 
-  it('reports image and PDF attachments the model cannot take', () => {
-    const kinds = unsupportedAttachmentKinds([attachment('image'), attachment('pdf')], model({}))
-    expect(kinds).toEqual(['image', 'pdf'])
+  it('flags images for models that take no references', () => {
+    expect(unsupportedAttachmentKinds([attachment('image')], model({}))).toEqual(['image'])
   })
 
-  it('reports nothing when the model supports both', () => {
-    const capable = model({ supportsImageInput: true, supportsFileInput: true })
-    expect(unsupportedAttachmentKinds([attachment('image'), attachment('pdf')], capable)).toEqual([])
+  it('accepts images when the model takes references', () => {
+    expect(unsupportedAttachmentKinds([attachment('image')], model({ maxReferenceImages: 4 }))).toEqual([])
+  })
+
+  it('always flags PDFs, which the Images API cannot accept', () => {
+    expect(unsupportedAttachmentKinds([attachment('pdf')], model({ maxReferenceImages: 4 }))).toEqual(['pdf'])
   })
 
   it('never flags text documents, which are inlined into the prompt', () => {

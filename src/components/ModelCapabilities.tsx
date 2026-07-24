@@ -1,9 +1,9 @@
-import type { ImageModel } from '../lib/openrouter'
-import { acceptsAttachments } from '../lib/modelInfo'
+import type { ImageModel } from '../types'
+import { acceptsReferenceImages, formatReferenceSupport } from '../lib/modelInfo'
 
 const TONES = {
   sky: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
-  rose: 'bg-rose-500/10 text-rose-300 border-rose-500/30',
+  violet: 'bg-violet-500/10 text-violet-300 border-violet-500/30',
   zinc: 'bg-zinc-800 text-zinc-500 border-zinc-700',
 } as const
 
@@ -15,9 +15,10 @@ export function Badge({ tone, children }: { tone: keyof typeof TONES; children: 
 export function CapabilityBadges({ model }: { model: ImageModel }) {
   return (
     <>
-      {model.supportsImageInput && <Badge tone="sky">Image input</Badge>}
-      {model.supportsFileInput && <Badge tone="rose">PDF input</Badge>}
-      {!acceptsAttachments(model) && <Badge tone="zinc">Text prompt only</Badge>}
+      <Badge tone={acceptsReferenceImages(model) ? 'sky' : 'zinc'}>
+        {formatReferenceSupport(model.maxReferenceImages)}
+      </Badge>
+      {model.aspectRatios && <Badge tone="violet">{`${model.aspectRatios.length} ratios`}</Badge>}
     </>
   )
 }

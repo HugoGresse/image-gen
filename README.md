@@ -4,9 +4,10 @@ Frontend-only image generation dashboard built with Vite, React, and the OpenRou
 
 ## Features
 
-- Generate 1–8 images from a text prompt
-- Attach reference images and documents to the prompt (drag & drop, paste, or browse): images and PDFs are sent as multimodal parts, text documents (`.txt`, `.md`, `.csv`, `.json`, `.yaml`) are inlined as reference blocks
-- Choose the model and aspect ratio for each generation
+- Generate 1–8 images from a text prompt through OpenRouter's dedicated Images API (`POST /api/v1/images`)
+- Attach reference images and documents to the prompt (drag & drop, paste, or browse): images are sent as `input_references`, text documents (`.txt`, `.md`, `.csv`, `.json`, `.yaml`) are inlined as reference blocks
+- Pick from every image model OpenRouter exposes, with per-model pricing, batch size, reference-image limit, and release date in the picker
+- Aspect ratios come from the selected model, and requests are batched to the number of images that model returns per call
 - Browse results by session in a gallery
 - Select images from a single session and create a revamped batch using that session's prompt, model, and aspect ratio
 - Save your OpenRouter API key locally in the browser for convenience

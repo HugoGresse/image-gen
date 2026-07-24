@@ -1,4 +1,4 @@
-import type { ImageModel } from './openrouter'
+import type { ImageModel } from '../types'
 
 const RECENT_DAYS = 60
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -9,23 +9,21 @@ function formatUsd(amount: number): string {
 }
 
 /**
- * Image output is billed per token by every current provider, so prices are shown
- * per 1K image tokens — comparable across models without guessing tokens per image.
+ * Image output is billed per token, so prices are shown per 1K image tokens —
+ * comparable across models without guessing tokens per image.
  */
 export function formatImageOutputPrice(pricePerToken: number | null): string | null {
   if (pricePerToken === null || pricePerToken === 0) return null
   return `${formatUsd(pricePerToken * 1_000)}/1K img`
 }
 
-export function formatPromptPrice(pricePerToken: number | null): string | null {
-  if (pricePerToken === null || pricePerToken === 0) return null
-  return `${formatUsd(pricePerToken * 1_000_000)}/M in`
+export function formatBatchSize(maxImagesPerRequest: number): string {
+  return maxImagesPerRequest > 1 ? `${maxImagesPerRequest}/request` : '1/request'
 }
 
-export function formatContextLength(tokens: number | null): string | null {
-  if (!tokens) return null
-  if (tokens >= 1_000_000) return `${Number((tokens / 1_000_000).toFixed(1))}M ctx`
-  return `${Math.round(tokens / 1_000)}K ctx`
+export function formatReferenceSupport(maxReferenceImages: number): string {
+  if (maxReferenceImages <= 0) return 'No reference images'
+  return maxReferenceImages === 1 ? '1 reference image' : `Up to ${maxReferenceImages} references`
 }
 
 export function formatReleaseDate(createdSeconds: number | null): string | null {
@@ -53,16 +51,16 @@ export function summarizeDescription(description: string): string {
   return firstSentence ?? plain
 }
 
-export function acceptsAttachments(model: ImageModel): boolean {
-  return model.supportsImageInput || model.supportsFileInput
+export function acceptsReferenceImages(model: ImageModel): boolean {
+  return model.maxReferenceImages > 0
 }
 
-/** Pricing, context, and release facts shown as a compact meta line, unknowns omitted. */
+/** Pricing, batch size, and release facts shown as a compact meta line. */
 export function modelMetaParts(model: ImageModel): string[] {
   return [
     formatImageOutputPrice(model.imageOutputPrice),
-    formatPromptPrice(model.promptPrice),
-    formatContextLength(model.contextLength),
+    formatBatchSize(model.maxImagesPerRequest),
+    model.resolutions?.length ? model.resolutions.join('/') : null,
     formatReleaseDate(model.createdAt),
   ].filter((part): part is string => part !== null)
 }

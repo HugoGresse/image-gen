@@ -49,7 +49,7 @@ export default function App() {
       trackEvent('generate_images', {
         count: params.count,
         ratio: params.ratio,
-        model: params.model,
+        model: params.model.id,
         attachments: params.attachments?.length ?? 0,
       })
 
@@ -68,7 +68,7 @@ export default function App() {
           url: '',
           prompt: params.prompt,
           ratio: params.ratio,
-          model: params.model,
+          model: params.model.id,
           createdAt: now,
           selected: false,
           loading: true,
@@ -128,7 +128,7 @@ export default function App() {
           url: '',
           prompt: revampedPrompt,
           ratio,
-          model,
+          model: model.id,
           createdAt: now,
           selected: false,
           loading: true,
