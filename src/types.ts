@@ -19,6 +19,8 @@ export interface ImageModel {
   maxImagesPerRequest: number
   /** Reference images the model accepts; 0 means text prompts only. */
   maxReferenceImages: number
+  /** Formats the model can return (e.g. 'png', 'svg'), or null when not declared. */
+  outputFormats: string[] | null
   /** USD per image-output token; null when unpriced or variable (auto router). */
   imageOutputPrice: number | null
 }
@@ -41,6 +43,8 @@ export interface GenerationParams {
   ratio: AspectRatio
   model: ImageModel
   attachments?: Attachment[]
+  /** Sent as `output_format`; omitted to keep the provider default. */
+  outputFormat?: string
 }
 
 export interface GeneratedImage {

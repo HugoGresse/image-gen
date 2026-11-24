@@ -12,6 +12,7 @@ const MODEL: ImageModel = {
   maxImagesPerRequest: 1,
   maxReferenceImages: 0,
   imageOutputPrice: null,
+  outputFormats: null,
 }
 
 function image(overrides: Partial<GeneratedImage> = {}): GeneratedImage {

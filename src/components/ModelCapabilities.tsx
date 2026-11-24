@@ -1,5 +1,6 @@
 import type { ImageModel } from '../types'
 import { acceptsReferenceImages, formatReferenceSupport } from '../lib/modelInfo'
+import { supportsVector } from '../lib/outputFormat'
 
 const TONES = {
   sky: 'bg-sky-500/10 text-sky-300 border-sky-500/30',
@@ -19,6 +20,7 @@ export function CapabilityBadges({ model }: { model: ImageModel }) {
         {formatReferenceSupport(model.maxReferenceImages)}
       </Badge>
       {model.aspectRatios && <Badge tone="violet">{`${model.aspectRatios.length} ratios`}</Badge>}
+      {supportsVector(model) && <Badge tone="violet">SVG output</Badge>}
     </>
   )
 }

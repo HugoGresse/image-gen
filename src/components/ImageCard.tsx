@@ -1,4 +1,5 @@
 import type { GeneratedImage } from '../types'
+import { downloadFileName } from '../lib/outputFormat'
 
 interface ImageCardProps {
   image: GeneratedImage
@@ -94,7 +95,7 @@ export function ImageCard({ image, onToggleSelect, onOpen, selectionMode, select
           </span>
           <a
             href={image.url}
-            download={`image-${image.id}.png`}
+            download={downloadFileName(image.id, image.url)}
             onClick={(e) => e.stopPropagation()}
             className="bg-zinc-900/80 hover:bg-zinc-800 text-white text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
           >

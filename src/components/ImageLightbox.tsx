@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GeneratedImage } from '../types'
 import { clampIndex, lightboxKeyAction, stepIndex } from '../lib/lightbox'
+import { downloadFileName, isSvgUrl } from '../lib/outputFormat'
 
 interface ImageLightboxProps {
   images: GeneratedImage[]
@@ -110,7 +111,7 @@ export function ImageLightbox({ images, index, onIndexChange, onClose }: ImageLi
 
         <a
           href={image.url}
-          download={`image-${image.id}.png`}
+          download={downloadFileName(image.id, image.url)}
           aria-label="Download image"
           title="Download image"
           className="p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800/80 transition-colors"
@@ -147,7 +148,7 @@ export function ImageLightbox({ images, index, onIndexChange, onClose }: ImageLi
         <img
           src={image.url}
           alt={image.prompt}
-          className="max-h-full max-w-full object-contain rounded-xl shadow-2xl"
+          className={`max-h-full max-w-full object-contain rounded-xl shadow-2xl ${isSvgUrl(image.url) ? 'h-full w-auto' : ''}`}
         />
 
         {images.length > 1 && (

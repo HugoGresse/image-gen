@@ -1,5 +1,8 @@
 import type { Attachment, AttachmentKind, GenerationParams, ImageModel } from '../types'
 import { buildInputReferences, buildPrompt, planBatches, resolveAspectRatio } from './imageRequest'
+import type { InputReference } from './imageRequest'
+import { imagesPerRequest, mediaTypeFor, resolveOutputFormat } from './outputFormat'
+import { toReferenceUrl } from './rasterize'
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const MAX_IMAGES_PER_REQUEST = 8
@@ -25,6 +28,7 @@ interface ImageModelEntry {
     resolution?: EnumParameter
     n?: RangeParameter
     input_references?: RangeParameter
+    output_format?: EnumParameter
   }
 }
 
@@ -72,6 +76,7 @@ export async function fetchImageModels(): Promise<ImageModel[]> {
       resolutions: params.resolution?.values ?? null,
       maxImagesPerRequest: params.n?.max ?? 1,
       maxReferenceImages: params.input_references?.max ?? 0,
+      outputFormats: params.output_format?.values ?? null,
       imageOutputPrice: pricesById.get(entry.id) ?? null,
     }
   })
@@ -100,12 +105,16 @@ interface ImagesResponseEntry {
   url?: string
 }
 
-/** Turns an Images API payload into displayable URLs (base64 entries become data URLs). */
-export function extractImages(payload: { data?: ImagesResponseEntry[] }): string[] {
+/**
+ * Turns an Images API payload into displayable URLs (base64 entries become data URLs).
+ * Without a reported media type, the requested format decides it.
+ */
+export function extractImages(payload: { data?: ImagesResponseEntry[] }, requestedFormat?: string): string[] {
+  const fallbackType = mediaTypeFor(requestedFormat)
   return (payload?.data ?? [])
     .map((entry) => {
       if (entry.url) return entry.url
-      if (entry.b64_json) return `data:${entry.media_type ?? 'image/png'};base64,${entry.b64_json}`
+      if (entry.b64_json) return `data:${entry.media_type ?? fallbackType};base64,${entry.b64_json}`
       return ''
     })
     .filter(Boolean)
@@ -135,7 +144,8 @@ interface ImageRequest {
   prompt: string
   ratio: string
   n: number
-  inputReferences: ReturnType<typeof buildInputReferences>
+  inputReferences: InputReference[]
+  outputFormat?: string
 }
 
 interface ImagesResult {
@@ -143,8 +153,18 @@ interface ImagesResult {
   cost: number | null
 }
 
+function rasterizeReferences(references: InputReference[]): Promise<InputReference[]> {
+  return Promise.all(
+    references.map(async (reference) => ({
+      ...reference,
+      image_url: { url: await toReferenceUrl(reference.image_url.url) },
+    }))
+  )
+}
+
 async function requestImages(apiKey: string, request: ImageRequest): Promise<ImagesResult> {
   const aspectRatio = resolveAspectRatio(request.model, request.ratio)
+  const { inputReferences } = request
 
   const response = await fetch(`${OPENROUTER_BASE_URL}/images`, {
     method: 'POST',
@@ -159,7 +179,8 @@ async function requestImages(apiKey: string, request: ImageRequest): Promise<Ima
       prompt: request.prompt,
       n: request.n,
       ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
-      ...(request.inputReferences.length > 0 ? { input_references: request.inputReferences } : {}),
+      ...(request.outputFormat ? { output_format: request.outputFormat } : {}),
+      ...(inputReferences.length > 0 ? { input_references: inputReferences } : {}),
     }),
   })
 
@@ -171,7 +192,7 @@ async function requestImages(apiKey: string, request: ImageRequest): Promise<Ima
   }
 
   const payload = await response.json()
-  const images = extractImages(payload)
+  const images = extractImages(payload, request.outputFormat)
   if (images.length === 0) {
     throw new Error('No image returned from OpenRouter. Please try again.')
   }
@@ -203,14 +224,16 @@ function totalCost(requests: Promise<ImagesResult>[]): Promise<number | null> {
  * text (documents) and input references (images).
  */
 export function generateImages(apiKey: string, params: GenerationParams): Generation {
-  const { model } = params
+  const { model, outputFormat } = params
   const count = Math.min(Math.max(params.count, 1), MAX_IMAGES_PER_REQUEST)
   const prompt = buildPrompt(params.prompt, params.attachments)
-  const inputReferences = buildInputReferences(params.attachments, model.maxReferenceImages)
+  const references = rasterizeReferences(buildInputReferences(params.attachments, model.maxReferenceImages))
 
-  const batches = planBatches(count, model.maxImagesPerRequest).map((size) => ({
+  const batches = planBatches(count, imagesPerRequest(model, outputFormat)).map((size) => ({
     size,
-    request: requestImages(apiKey, { model, prompt, ratio: params.ratio, n: size, inputReferences }),
+    request: references.then((inputReferences) =>
+      requestImages(apiKey, { model, prompt, ratio: params.ratio, n: size, inputReferences, outputFormat })
+    ),
   }))
 
   return {
@@ -234,14 +257,11 @@ export function generateRevampedImages(
     ? refinementHint.trim()
     : 'Refine and improve this image, enhancing detail, composition, and visual quality.'
 
+  const outputFormat = resolveOutputFormat(model, false)
   const requests = imageUrls.map((url) =>
-    requestImages(apiKey, {
-      model,
-      prompt,
-      ratio,
-      n: 1,
-      inputReferences: [{ type: 'image_url', image_url: { url } }],
-    })
+    rasterizeReferences([{ type: 'image_url', image_url: { url } }]).then((inputReferences) =>
+      requestImages(apiKey, { model, prompt, ratio, n: 1, inputReferences, outputFormat })
+    )
   )
 
   return {

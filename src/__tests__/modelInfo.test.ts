@@ -24,6 +24,7 @@ function model(overrides: Partial<ImageModel> = {}): ImageModel {
     maxImagesPerRequest: 10,
     maxReferenceImages: 14,
     imageOutputPrice: 0.00003,
+    outputFormats: null,
     ...overrides,
   }
 }

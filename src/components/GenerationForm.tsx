@@ -5,6 +5,7 @@ import { FALLBACK_RATIOS } from '../types'
 import { fetchImageModels, unsupportedAttachmentKinds } from '../lib/openrouter'
 import { formatReferenceSupport } from '../lib/modelInfo'
 import { planBatches } from '../lib/imageRequest'
+import { imagesPerRequest, isVectorOnly, resolveOutputFormat, supportsVector } from '../lib/outputFormat'
 import { AttachmentPicker } from './AttachmentPicker'
 import { ModelSelect } from './ModelSelect'
 import { useAttachments } from '../hooks/useAttachments'
@@ -22,6 +23,7 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   const [loadingModels, setLoadingModels] = useState(true)
   const [modelsError, setModelsError] = useState<string | null>(null)
   const [model, setModel] = useState('')
+  const [preferVector, setPreferVector] = useState(false)
   const { attachments, errors: attachmentErrors, isReading, addFiles, removeAttachment } = useAttachments()
 
   useEffect(() => {
@@ -43,14 +45,20 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   const selectedModel = models.find((m) => m.id === model)
   const ratios = selectedModel?.aspectRatios ?? (selectedModel ? null : FALLBACK_RATIOS)
   const unsupported = unsupportedAttachmentKinds(attachments, selectedModel)
-  const requestCount = selectedModel ? planBatches(count, selectedModel.maxImagesPerRequest).length : 1
+  const outputFormat = selectedModel ? resolveOutputFormat(selectedModel, preferVector) : undefined
+  const requestCount = selectedModel ? planBatches(count, imagesPerRequest(selectedModel, outputFormat)).length : 1
   // Ratios are declared per model, so fall back to one the selected model accepts.
   const effectiveRatio = ratios && ratios.length > 0 && !ratios.includes(ratio) ? ratios[0] : ratio
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!prompt.trim() || isLoading || !selectedModel) return
-    onGenerate({ prompt: prompt.trim(), count, ratio: effectiveRatio, model: selectedModel, attachments })
+    onGenerate({ prompt: prompt.trim(), count, ratio: effectiveRatio, model: selectedModel, attachments, outputFormat })
+  }
+
+  function handleModelChange(id: string) {
+    setModel(id)
+    setPreferVector(false)
   }
 
   /** Pasting a screenshot or file into the prompt attaches it instead of inserting text. */
@@ -105,7 +113,7 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
           <ModelSelect
             models={models}
             value={model}
-            onChange={setModel}
+            onChange={handleModelChange}
             loading={loadingModels}
             error={modelsError}
           />
@@ -164,6 +172,14 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
         </div>
       </div>
 
+      {selectedModel && supportsVector(selectedModel) && (
+        <OutputFormatToggle
+          vectorOnly={isVectorOnly(selectedModel)}
+          vector={outputFormat !== undefined}
+          onChange={setPreferVector}
+        />
+      )}
+
       <button
         type="submit"
         disabled={!prompt.trim() || isLoading || !model}
@@ -187,5 +203,48 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
         )}
       </button>
     </form>
+  )
+}
+
+interface OutputFormatToggleProps {
+  vectorOnly: boolean
+  vector: boolean
+  onChange: (vector: boolean) => void
+}
+
+function OutputFormatToggle({ vectorOnly, vector, onChange }: OutputFormatToggleProps) {
+  if (vectorOnly) {
+    return <p className="text-xs text-zinc-500 -mt-1">This model returns SVG vector graphics.</p>
+  }
+
+  const options = [
+    { label: 'Raster', value: false },
+    { label: 'SVG', value: true },
+  ]
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-zinc-300 mb-2">Output</label>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {options.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            aria-pressed={vector === option.value}
+            onClick={() => onChange(option.value)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+              vector === option.value
+                ? 'bg-violet-600 text-white'
+                : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-violet-500 hover:text-violet-400'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+        {vector && (
+          <span className="text-[11px] text-zinc-600">One image per request</span>
+        )}
+      </div>
+    </div>
   )
 }

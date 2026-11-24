@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { extractCost, extractImages, fetchImageModels, sumCosts, unsupportedAttachmentKinds } from '../lib/openrouter'
+import {
+  extractCost,
+  extractImages,
+  fetchImageModels,
+  generateImages,
+  sumCosts,
+  unsupportedAttachmentKinds,
+} from '../lib/openrouter'
 import type { Attachment, ImageModel } from '../types'
 
 // Sample of GET /api/v1/images/models
@@ -14,6 +21,7 @@ const IMAGE_MODELS = [
       aspect_ratio: { type: 'enum', values: ['1:1', '16:9', '9:16'] },
       n: { type: 'range', min: 1, max: 10 },
       input_references: { type: 'range', min: 0, max: 14 },
+      output_format: { type: 'enum', values: ['png', 'jpeg', 'svg'] },
     },
   },
   {
@@ -70,6 +78,7 @@ describe('fetchImageModels', () => {
       resolutions: ['1K', '2K', '4K'],
       maxImagesPerRequest: 10,
       maxReferenceImages: 14,
+      outputFormats: ['png', 'jpeg', 'svg'],
       createdAt: 1_770_000_000,
     })
   })
@@ -80,6 +89,7 @@ describe('fetchImageModels', () => {
       aspectRatios: null,
       maxImagesPerRequest: 1,
       maxReferenceImages: 8,
+      outputFormats: null,
     })
     expect(models.find((m) => m.id === 'openrouter/auto')).toMatchObject({
       aspectRatios: null,
@@ -125,6 +135,10 @@ describe('extractImages', () => {
     expect(extractImages({ data: [{ b64_json: 'AAAA' }] })).toEqual(['data:image/png;base64,AAAA'])
   })
 
+  it('falls back to the requested format when no media type is reported', () => {
+    expect(extractImages({ data: [{ b64_json: 'PHN2Zz4=' }] }, 'svg')).toEqual(['data:image/svg+xml;base64,PHN2Zz4='])
+  })
+
   it('passes through hosted urls and skips empty entries', () => {
     const urls = extractImages({ data: [{ url: 'https://cdn.example/img.png' }, {}] })
     expect(urls).toEqual(['https://cdn.example/img.png'])
@@ -146,6 +160,7 @@ describe('unsupportedAttachmentKinds', () => {
     maxImagesPerRequest: 1,
     maxReferenceImages: 0,
     imageOutputPrice: null,
+    outputFormats: null,
     ...overrides,
   })
   const attachment = (kind: Attachment['kind']): Attachment => ({
@@ -195,5 +210,36 @@ describe('extractCost and sumCosts', () => {
   it('returns null when nothing was reported', () => {
     expect(sumCosts([null, null])).toBeNull()
     expect(sumCosts([])).toBeNull()
+  })
+})
+
+describe('generateImages with SVG output', () => {
+  it('sends output_format and one image per request for raster models that vectorise', async () => {
+    vi.stubGlobal('window', { location: { origin: 'http://localhost' } })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: [{ b64_json: 'PHN2Zz4=' }], usage: { cost: 0.01 } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const gpt: ImageModel = {
+      id: 'openai/gpt-image-2.6-flare',
+      label: 'GPT Image 2.6 Flare',
+      description: '',
+      createdAt: null,
+      aspectRatios: null,
+      resolutions: null,
+      maxImagesPerRequest: 10,
+      maxReferenceImages: 16,
+      outputFormats: ['png', 'svg'],
+      imageOutputPrice: null,
+    }
+    const { images, cost } = generateImages('key', { prompt: 'logo', count: 3, ratio: '1:1', model: gpt, outputFormat: 'svg' })
+
+    expect(await Promise.all(images)).toEqual(Array(3).fill('data:image/svg+xml;base64,PHN2Zz4='))
+    expect(await cost).toBeCloseTo(0.03)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body).toMatchObject({ model: gpt.id, n: 1, output_format: 'svg' })
   })
 })
