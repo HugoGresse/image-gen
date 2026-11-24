@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { ClipboardEvent, FormEvent } from 'react'
-import type { AspectRatio, GenerationParams, ImageModel } from '../types'
+import type { AspectRatio, GenerationParams } from '../types'
 import { FALLBACK_RATIOS } from '../types'
-import { fetchImageModels, unsupportedAttachmentKinds } from '../lib/openrouter'
+import { unsupportedAttachmentKinds } from '../lib/openrouter'
+import { useImageModels } from '../models/modelsContext'
 import { formatReferenceSupport } from '../lib/modelInfo'
 import { planBatches } from '../lib/imageRequest'
 import { imagesPerRequest, isVectorOnly, resolveOutputFormat, supportsVector } from '../lib/outputFormat'
@@ -19,28 +20,11 @@ export function GenerationForm({ onGenerate, isLoading }: GenerationFormProps) {
   const [prompt, setPrompt] = useState('')
   const [count, setCount] = useState(4)
   const [ratio, setRatio] = useState<AspectRatio>('1:1')
-  const [models, setModels] = useState<ImageModel[]>([])
-  const [loadingModels, setLoadingModels] = useState(true)
-  const [modelsError, setModelsError] = useState<string | null>(null)
-  const [model, setModel] = useState('')
+  const { models, loading: loadingModels, error: modelsError } = useImageModels()
+  const [pickedModel, setModel] = useState('')
+  const model = pickedModel || (models[0]?.id ?? '')
   const [preferVector, setPreferVector] = useState(false)
   const { attachments, errors: attachmentErrors, isReading, addFiles, removeAttachment } = useAttachments()
-
-  useEffect(() => {
-    fetchImageModels()
-      .then((fetched) => {
-        if (fetched.length === 0) {
-          setModelsError('No image generation models available.')
-          return
-        }
-        setModels(fetched)
-        setModel(fetched[0].id)
-      })
-      .catch((err: unknown) => {
-        setModelsError(err instanceof Error ? err.message : 'Failed to load models.')
-      })
-      .finally(() => setLoadingModels(false))
-  }, [])
 
   const selectedModel = models.find((m) => m.id === model)
   const ratios = selectedModel?.aspectRatios ?? (selectedModel ? null : FALLBACK_RATIOS)
