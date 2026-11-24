@@ -1,7 +1,11 @@
 import { useState } from 'react'
 import type { Project } from '../../workspace/types'
 import { parseCardList } from '../../workspace/prompt'
+import { estimateBatchCost } from '../../workspace/cost'
+import { queueCounts } from '../../workspace/reducer'
+import { formatCost } from '../../lib/money'
 import { useWorkspace } from '../../workspace/workspaceContext'
+import { findModel, useImageModels } from '../../models/modelsContext'
 import { CardTile } from './CardTile'
 
 interface CardBoardProps {
@@ -13,6 +17,22 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
   const { actions } = useWorkspace()
   const [draft, setDraft] = useState('')
   const parsed = parseCardList(draft)
+
+  const missing = project.cards.filter((card) => card.variants.length === 0 && (card.status === 'idle' || card.status === 'error'))
+  const { queued, generating } = queueCounts(project)
+  const { models } = useImageModels()
+  const model = findModel(models, project.settings.modelId)
+  const anchorCount = project.cards.filter((card) => card.anchor).length
+  const referenceOverflow = model !== undefined && anchorCount > 0 && project.referenceIds.length + anchorCount > model.maxReferenceImages
+
+  function handleGenerateMissing() {
+    const images = missing.length * project.settings.variantsPerCard
+    const estimate = formatCost(estimateBatchCost(project, missing.length))
+    const message = `Generate ${missing.length} items (${images} images) with ${project.settings.modelId}?${
+      estimate ? `\nEstimated cost ≈ ${estimate}.` : '\nNo estimate yet: nothing was generated in this project.'
+    }`
+    if (window.confirm(message)) actions.queueCards(project.id, missing.map((card) => card.id))
+  }
 
   function handleAdd() {
     if (parsed.length === 0) return
@@ -46,6 +66,37 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
         </div>
       </div>
 
+      {project.cards.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap text-xs">
+          <button
+            type="button"
+            onClick={handleGenerateMissing}
+            disabled={!canGenerate || missing.length === 0}
+            className="bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white font-semibold px-3 py-1.5 rounded-lg"
+          >
+            Generate missing ({missing.length})
+          </button>
+          {(queued > 0 || generating > 0) && (
+            <span className="text-zinc-400">
+              {generating} generating · {queued} queued
+            </span>
+          )}
+          {queued > 0 && (
+            <button type="button" onClick={() => actions.cancelQueue(project.id)} className="text-zinc-400 hover:text-white underline">
+              Cancel queue
+            </button>
+          )}
+          <span className="text-zinc-600 ml-auto">★ marks anchors: their image guides every other item.</span>
+          {referenceOverflow && model && (
+            <span className="w-full text-amber-400">
+              {model.label} accepts {model.maxReferenceImages} reference image{model.maxReferenceImages === 1 ? '' : 's'}: with{' '}
+              {project.referenceIds.length} style references and {anchorCount} anchors, some are left out (anchors keep at least half
+              of the slots).
+            </span>
+          )}
+        </div>
+      )}
+
       {project.cards.length === 0 ? (
         <p className="text-sm text-zinc-600 text-center py-10">No items yet. Add some above, or ask the assistant.</p>
       ) : (
@@ -56,10 +107,11 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
               card={card}
               ratio={project.settings.ratio}
               canGenerate={canGenerate}
-              onGenerate={() => actions.generateCard(project.id, card.id)}
+              onGenerate={() => actions.queueCards(project.id, [card.id])}
               onChoose={(variantId) => actions.chooseVariant(project.id, card.id, variantId)}
               onUpdate={(patch) => actions.updateCard(project.id, card.id, patch)}
               onRemove={() => actions.removeCard(project.id, card.id)}
+              onToggleAnchor={() => actions.setAnchor(project.id, card.id, !card.anchor)}
             />
           ))}
         </div>

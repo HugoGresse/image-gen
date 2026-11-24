@@ -2,16 +2,27 @@ import { useEffect, useMemo, useReducer, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { findModel, useImageModels } from '../models/modelsContext'
 import { deleteImages, deleteProjectRecord, loadProjects, saveProjects } from './db'
-import { generateCardVariants } from './generateCard'
+import { generateCardVariants, withRetry } from './generateCard'
 import type { CardGenerationResult } from './generateCard'
 import { forgetImageUrls, storeImageFile } from './images'
-import { DEFAULT_VARIANTS_PER_CARD, initialWorkspace, referencedImageIds, workspaceReducer } from './reducer'
+import {
+  DEFAULT_VARIANTS_PER_CARD,
+  anchorImageIds,
+  initialWorkspace,
+  nextToStart,
+  referencedImageIds,
+  workspaceReducer,
+} from './reducer'
 import type { WorkspaceAction } from './reducer'
+import { defaultRatio, reconcileSettings } from './settings'
 import type { Project, ProjectSettings, WorkspaceState } from './types'
 import { WorkspaceContext, findProject } from './workspaceContext'
 import type { WorkspaceActions } from './workspaceContext'
 
 const SAVE_DELAY_MS = 500
+const CONCURRENCY = 2
+const MAX_ATTEMPTS = 2
+const RETRY_DELAY_MS = 3000
 
 interface WorkspaceProviderProps {
   apiKey: string
@@ -76,7 +87,7 @@ export function WorkspaceProvider({ apiKey, onSpend, onError, children }: Worksp
         dispatch({
           type: 'updateSettings',
           id: project.id,
-          settings: { modelId: fallback.id, ratio: fallback.aspectRatios?.[0] ?? project.settings.ratio },
+          settings: reconcileSettings({ ...project.settings, modelId: fallback.id }, fallback),
           now: Date.now(),
         })
       )
@@ -93,31 +104,33 @@ export function WorkspaceProvider({ apiKey, onSpend, onError, children }: Worksp
 
     function defaultSettings(overrides: Partial<ProjectSettings>): ProjectSettings {
       const model = findModel(live.current.models, overrides.modelId ?? '') ?? live.current.models[0]
-      const ratios = model?.aspectRatios ?? []
-      return {
+      const settings = {
         modelId: model?.id ?? '',
-        ratio: overrides.ratio ?? (ratios.includes('2:3') ? '2:3' : (ratios[0] ?? '1:1')),
+        ratio: overrides.ratio ?? defaultRatio(model),
         outputFormat: overrides.outputFormat,
         variantsPerCard: overrides.variantsPerCard ?? DEFAULT_VARIANTS_PER_CARD,
       }
+      return reconcileSettings(settings, model)
     }
 
     async function generateCard(id: string, cardId: string): Promise<CardGenerationResult> {
       const target = project(id)
       const card = target?.cards.find((c) => c.id === cardId)
       if (!target || !card) return { variants: [], error: 'Card not found.' }
-      if (!live.current.apiKey) return { variants: [], error: 'Enter your OpenRouter API key first.' }
-      const model = findModel(live.current.models, target.settings.modelId)
-      if (!model) return { variants: [], error: `Model ${target.settings.modelId || '(none)'} is not available.` }
       if (card.status === 'generating') return { variants: [], error: 'This card is already being generated.' }
+      const fail = (error: string): CardGenerationResult => {
+        dispatch({ type: 'generationFinished', id, cardId, variants: [], error, now: now() })
+        return { variants: [], error }
+      }
+      if (!live.current.apiKey) return fail('Enter your OpenRouter API key first.')
+      const model = findModel(live.current.models, target.settings.modelId)
+      if (!model) return fail(`Model ${target.settings.modelId || '(none)'} is not available.`)
 
       dispatch({ type: 'generationStarted', id, cardId })
-      let result: CardGenerationResult
-      try {
-        result = await generateCardVariants(live.current.apiKey, target, card, model)
-      } catch (err) {
-        result = { variants: [], error: err instanceof Error ? err.message : 'Generation failed.' }
-      }
+      const result = await withRetry(
+        () => generateCardVariants(live.current.apiKey, target, card, model, anchorImageIds(target, cardId)),
+        { maxAttempts: MAX_ATTEMPTS, delayMs: RETRY_DELAY_MS }
+      )
 
       const stillThere = project(id)?.cards.some((c) => c.id === cardId)
       if (stillThere) {
@@ -148,7 +161,13 @@ export function WorkspaceProvider({ apiKey, onSpend, onError, children }: Worksp
         removeStoredImages(referencedImageIds(target), live.current.onError)
       },
       updateStyleGuide: (id, styleGuide) => dispatch({ type: 'updateStyleGuide', id, styleGuide, now: now() }),
-      updateSettings: (id, settings) => dispatch({ type: 'updateSettings', id, settings, now: now() }),
+      updateSettings: (id, settings) => {
+        const current = project(id)
+        if (!current) return
+        const merged = { ...current.settings, ...settings }
+        const reconciled = reconcileSettings(merged, findModel(live.current.models, merged.modelId))
+        dispatch({ type: 'updateSettings', id, settings: reconciled, now: now() })
+      },
       addReferenceFiles: async (id, files) => {
         const imageIds = await Promise.all(files.map(storeImageFile))
         dispatch({ type: 'addReferences', id, imageIds, now: now() })
@@ -168,10 +187,22 @@ export function WorkspaceProvider({ apiKey, onSpend, onError, children }: Worksp
         dispatch({ type: 'removeCard', id, cardId, now: now() })
         if (card) removeStoredImages(card.variants.map((v) => v.imageId), live.current.onError)
       },
+      queueCards: (id, cardIds) => {
+        dispatch({ type: 'queueCards', id, cardIds })
+        return project(id)?.cards.filter((c) => cardIds.includes(c.id) && c.status === 'queued').length ?? 0
+      },
+      cancelQueue: (id) => dispatch({ type: 'cancelQueue', id }),
+      setAnchor: (id, cardId, anchor) => dispatch({ type: 'setAnchor', id, cardId, anchor, now: now() }),
       chooseVariant: (id, cardId, variantId) => dispatch({ type: 'chooseVariant', id, cardId, variantId, now: now() }),
       generateCard,
     }
   }, [])
+
+  useEffect(() => {
+    nextToStart(stateRef.current, CONCURRENCY).forEach(({ projectId, cardId }) => {
+      void actions.generateCard(projectId, cardId)
+    })
+  }, [state.projects, actions])
 
   const value = useMemo(() => ({ state, actions }), [state, actions])
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>

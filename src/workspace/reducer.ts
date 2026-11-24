@@ -20,6 +20,9 @@ export type WorkspaceAction =
   | { type: 'generationStarted'; id: string; cardId: string }
   | { type: 'generationFinished'; id: string; cardId: string; variants: Variant[]; error?: string; now: number }
   | { type: 'chooseVariant'; id: string; cardId: string; variantId: string; now: number }
+  | { type: 'queueCards'; id: string; cardIds: string[] }
+  | { type: 'cancelQueue'; id: string }
+  | { type: 'setAnchor'; id: string; cardId: string; anchor: boolean; now: number }
 
 export const initialWorkspace: WorkspaceState = { view: 'studio', projects: [], activeProjectId: null, loaded: false }
 
@@ -27,11 +30,16 @@ export function clampVariants(value: number): number {
   return Math.min(Math.max(Math.trunc(value) || 1, 1), MAX_VARIANTS_PER_CARD)
 }
 
-/** A generation cannot survive a reload, so cards left mid-flight are put back to idle. */
+/**
+ * A generation cannot survive a reload, and a queue must not resume spending
+ * without the user, so cards left queued or mid-flight are put back to idle.
+ */
 export function sanitizeProject(project: Project): Project {
   return {
     ...project,
-    cards: project.cards.map((card) => (card.status === 'generating' ? { ...card, status: 'idle' } : card)),
+    cards: project.cards.map((card) =>
+      card.status === 'generating' || card.status === 'queued' ? { ...card, status: 'idle' } : card
+    ),
   }
 }
 
@@ -137,6 +145,22 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
           }
         })
       )
+    case 'queueCards':
+      return mapProject(state, action.id, null, (p) => ({
+        ...p,
+        cards: p.cards.map((card) =>
+          action.cardIds.includes(card.id) && card.status !== 'generating' && card.status !== 'queued'
+            ? { ...card, status: 'queued', error: undefined }
+            : card
+        ),
+      }))
+    case 'cancelQueue':
+      return mapProject(state, action.id, null, (p) => ({
+        ...p,
+        cards: p.cards.map((card) => (card.status === 'queued' ? { ...card, status: 'idle' } : card)),
+      }))
+    case 'setAnchor':
+      return mapProject(state, action.id, action.now, (p) => mapCard(p, action.cardId, (c) => ({ ...c, anchor: action.anchor })))
     case 'chooseVariant':
       return mapProject(state, action.id, action.now, (p) =>
         mapCard(p, action.cardId, (c) =>
@@ -157,4 +181,35 @@ export function activeProject(state: WorkspaceState): Project | undefined {
 /** Every image a project still points at, so orphans can be removed from storage. */
 export function referencedImageIds(project: Project): string[] {
   return [...project.referenceIds, ...project.cards.flatMap((card) => card.variants.map((variant) => variant.imageId))]
+}
+
+export interface QueuedCard {
+  projectId: string
+  cardId: string
+}
+
+/** Queued items to start now so that at most `concurrency` generations run at once. */
+export function nextToStart(state: WorkspaceState, concurrency: number): QueuedCard[] {
+  const cards = state.projects.flatMap((project) => project.cards.map((card) => ({ projectId: project.id, card })))
+  const running = cards.filter(({ card }) => card.status === 'generating').length
+  return cards
+    .filter(({ card }) => card.status === 'queued')
+    .slice(0, Math.max(concurrency - running, 0))
+    .map(({ projectId, card }) => ({ projectId, cardId: card.id }))
+}
+
+/** Chosen images of the project's anchors, lent as references to the other items. */
+export function anchorImageIds(project: Project, exceptCardId: string): string[] {
+  return project.cards.flatMap((card) => {
+    if (!card.anchor || card.id === exceptCardId) return []
+    const chosen = card.variants.find((variant) => variant.id === card.chosenVariantId)
+    return chosen ? [chosen.imageId] : []
+  })
+}
+
+export function queueCounts(project: Project): { queued: number; generating: number } {
+  return {
+    queued: project.cards.filter((card) => card.status === 'queued').length,
+    generating: project.cards.filter((card) => card.status === 'generating').length,
+  }
 }

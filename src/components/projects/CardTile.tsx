@@ -12,13 +12,15 @@ interface CardTileProps {
   onChoose: (variantId: string) => void
   onUpdate: (patch: Partial<Pick<Card, 'title' | 'number' | 'prompt'>>) => void
   onRemove: () => void
+  onToggleAnchor: () => void
 }
 
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-violet-500'
 
-export function CardTile({ card, ratio, canGenerate, onGenerate, onChoose, onUpdate, onRemove }: CardTileProps) {
+export function CardTile({ card, ratio, canGenerate, onGenerate, onChoose, onUpdate, onRemove, onToggleAnchor }: CardTileProps) {
   const chosen = card.variants.find((v) => v.id === card.chosenVariantId)
   const isGenerating = card.status === 'generating'
+  const isBusy = isGenerating || card.status === 'queued'
   const cost = formatCost(cardCost(card))
 
   return (
@@ -29,11 +31,29 @@ export function CardTile({ card, ratio, canGenerate, onGenerate, onChoose, onUpd
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-600">No image yet</div>
         )}
-        {isGenerating && (
+        {isBusy && (
           <div className="absolute inset-0 bg-zinc-950/60 flex items-center justify-center text-xs text-violet-300">
-            Generating…
+            {isGenerating ? 'Generating…' : 'Queued'}
           </div>
         )}
+        <button
+          type="button"
+          onClick={onToggleAnchor}
+          disabled={!chosen && !card.anchor}
+          aria-pressed={Boolean(card.anchor)}
+          title={
+            card.anchor
+              ? 'Anchor: its image guides every other item'
+              : chosen
+                ? 'Use as style anchor for the other items'
+                : 'Generate an image before using this item as an anchor'
+          }
+          className={`absolute top-1.5 right-1.5 w-7 h-7 rounded-full text-sm flex items-center justify-center ${
+            card.anchor ? 'bg-amber-400 text-zinc-950' : 'bg-zinc-900/70 text-zinc-400 hover:text-amber-300 disabled:opacity-30 disabled:hover:text-zinc-400'
+          }`}
+        >
+          ★
+        </button>
       </div>
 
       {card.variants.length > 1 && (
@@ -82,13 +102,17 @@ export function CardTile({ card, ratio, canGenerate, onGenerate, onChoose, onUpd
         className={`${INPUT} resize-none`}
       />
 
-      {card.status === 'error' && card.error && <p className="text-[11px] text-red-400 break-words">{card.error}</p>}
+      {card.error && (
+        <p className={`text-[11px] break-words ${card.status === 'error' ? 'text-red-400' : 'text-amber-400'}`}>
+          {card.status === 'error' ? card.error : `Some variants failed: ${card.error}`}
+        </p>
+      )}
 
       <div className="flex items-center gap-2 mt-auto">
         <button
           type="button"
           onClick={onGenerate}
-          disabled={!canGenerate || isGenerating}
+          disabled={!canGenerate || isBusy}
           className="flex-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold py-1.5 rounded-lg transition-colors"
         >
           {card.variants.length > 0 ? 'Regenerate' : 'Generate'}
@@ -97,7 +121,7 @@ export function CardTile({ card, ratio, canGenerate, onGenerate, onChoose, onUpd
         <button
           type="button"
           onClick={onRemove}
-          disabled={isGenerating}
+          disabled={isBusy}
           aria-label={`Remove ${card.title}`}
           className="text-zinc-500 hover:text-red-400 disabled:opacity-40 text-xs px-1.5"
         >

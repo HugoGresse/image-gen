@@ -16,6 +16,10 @@ export interface WorkspaceActions {
   updateCard: (id: string, cardId: string, patch: Partial<Pick<Card, 'title' | 'number' | 'prompt'>>) => void
   removeCard: (id: string, cardId: string) => void
   chooseVariant: (id: string, cardId: string, variantId: string) => void
+  /** Queues items for generation; returns how many were queued. Runs a few at a time. */
+  queueCards: (id: string, cardIds: string[]) => number
+  cancelQueue: (id: string) => void
+  setAnchor: (id: string, cardId: string, anchor: boolean) => void
   generateCard: (id: string, cardId: string) => Promise<CardGenerationResult>
   /** Latest state, readable from async code (chat tools) without waiting for a render. */
   getState: () => WorkspaceState

@@ -22,13 +22,7 @@ export function ProjectSettingsPanel({ project }: { project: Project }) {
   const update = (settings: Partial<Project['settings']>) => actions.updateSettings(project.id, settings)
 
   function handleModelChange(modelId: string) {
-    const next = findModel(models, modelId)
-    const nextRatios = next?.aspectRatios ?? []
-    update({
-      modelId,
-      ratio: nextRatios.length === 0 || nextRatios.includes(project.settings.ratio) ? project.settings.ratio : nextRatios[0],
-      outputFormat: next && isVectorOnly(next) ? VECTOR_FORMAT : undefined,
-    })
+    update({ modelId })
   }
 
   async function handleFiles(files: FileList | null) {

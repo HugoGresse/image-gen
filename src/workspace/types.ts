@@ -8,7 +8,7 @@ export interface ProjectSettings {
   variantsPerCard: number
 }
 
-export type CardStatus = 'idle' | 'generating' | 'error'
+export type CardStatus = 'idle' | 'queued' | 'generating' | 'error'
 
 export interface Variant {
   id: string
@@ -28,6 +28,8 @@ export interface Card {
   error?: string
   variants: Variant[]
   chosenVariantId?: string
+  /** Anchors lend their chosen image as a style reference to every other item. */
+  anchor?: boolean
 }
 
 export interface Project {
