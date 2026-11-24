@@ -88,6 +88,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     show_title: { type: 'boolean' },
     show_number: { type: 'boolean' },
   }, ['project_id']),
+  tool('review_consistency', 'Ask a vision model to score (1-5) how well each chosen image matches the series style. Spends a little credit; the user approves. Omit card_ids to check every item not checked yet. Items scoring 2 or less are worth regenerating.', {
+    project_id: projectId,
+    card_ids: { type: 'array', items: { type: 'string' } },
+  }, ['project_id']),
   tool('cancel_generation', 'Cancel the items still waiting in the generation queue (running ones finish).', { project_id: projectId }, ['project_id']),
   tool('delete_project', 'Delete a project and all its images. The user is asked to confirm.', { project_id: projectId }, ['project_id']),
 ]

@@ -124,7 +124,7 @@ interface CachedCatalogue {
   models: ChatModel[]
 }
 
-function readCache(): CachedCatalogue | null {
+export function readCache(): CachedCatalogue | null {
   try {
     const parsed = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as CachedCatalogue | null
     return parsed && Array.isArray(parsed.models) ? parsed : null
@@ -150,4 +150,12 @@ export async function fetchChatModels(now = Date.now()): Promise<ChatModel[]> {
     if (cached) return cached.models
     throw error
   }
+}
+
+/** A model to judge images: the chat model when the catalogue says it reads images (or a router), else the default router. */
+export function visionModelId(stored: string | null, catalogue: ChatModel[]): string {
+  const id = usableModelId(stored, catalogue)
+  const known = catalogue.find((model) => model.id === id)
+  if (isRouterModel(id, catalogue)) return id
+  return known?.acceptsImages ? id : DEFAULT_CHAT_MODEL
 }

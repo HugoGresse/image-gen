@@ -17,12 +17,18 @@ import type { WorkspaceAction } from './reducer'
 import { defaultRatio, reconcileSettings } from './settings'
 import type { Project, ProjectSettings, WorkspaceState } from './types'
 import { WorkspaceContext, findProject } from './workspaceContext'
-import type { WorkspaceActions } from './workspaceContext'
+import type { ReviewSummary, WorkspaceActions } from './workspaceContext'
+import { FLAG_THRESHOLD, chosenImageId, reviewBasisProblem, reviewCard } from './review'
+import type { ThumbnailCache } from './review'
+import { mapPool } from '../lib/pool'
+import { readCache, visionModelId } from '../chat/catalogue'
+import { loadChatModel } from '../chat/conversation'
 
 const SAVE_DELAY_MS = 500
 const CONCURRENCY = 2
 const MAX_ATTEMPTS = 2
 const RETRY_DELAY_MS = 3000
+const REVIEW_CONCURRENCY = 2
 
 interface WorkspaceProviderProps {
   apiKey: string
@@ -142,8 +148,41 @@ export function WorkspaceProvider({ apiKey, onSpend, onError, children }: Worksp
       return result
     }
 
+    async function reviewCards(id: string, cardIds: string[]): Promise<ReviewSummary> {
+      const target = project(id)
+      const cards = target?.cards.filter((c) => cardIds.includes(c.id) && chosenImageId(c) && !c.reviewing) ?? []
+      if (!target || cards.length === 0) return { reviewed: 0, flagged: 0, failed: 0, cost: 0 }
+      if (!live.current.apiKey) throw new Error('Enter your OpenRouter API key first.')
+      const basisProblem = reviewBasisProblem(target)
+      if (basisProblem) throw new Error(basisProblem)
+      const model = visionModelId(loadChatModel(), readCache()?.models ?? [])
+      const thumbnails: ThumbnailCache = new Map()
+
+      dispatch({ type: 'reviewStarted', id, cardIds: cards.map((c) => c.id) })
+      const results = await mapPool(cards, REVIEW_CONCURRENCY, async (card) => {
+        try {
+          const review = await reviewCard(live.current.apiKey, model, project(id) ?? target, card, thumbnails)
+          dispatch({ type: 'reviewFinished', id, cardId: card.id, review, now: now() })
+          return review
+        } catch (err) {
+          const error = err instanceof Error ? err.message : 'Review failed.'
+          dispatch({ type: 'reviewFinished', id, cardId: card.id, error, now: now() })
+          throw err
+        }
+      })
+      live.current.onSpend()
+      const reviews = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+      return {
+        reviewed: reviews.length,
+        flagged: reviews.filter((r) => r.score <= FLAG_THRESHOLD).length,
+        failed: results.length - reviews.length,
+        cost: reviews.reduce((total, r) => total + (r.cost ?? 0), 0),
+      }
+    }
+
     return {
       getState: () => stateRef.current,
+      reviewCards,
       setView: (view) => dispatch({ type: 'setView', view }),
       createProject: (name, settings = {}) => {
         const id = crypto.randomUUID()

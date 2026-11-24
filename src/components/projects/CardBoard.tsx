@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { Project } from '../../workspace/types'
 import { parseCardList } from '../../workspace/prompt'
 import { estimateBatchCost } from '../../workspace/cost'
-import { queueCounts } from '../../workspace/reducer'
+import { currentReview, queueCounts } from '../../workspace/reducer'
+import { FLAG_THRESHOLD, chosenImageId } from '../../workspace/review'
 import { formatCost } from '../../lib/money'
 import { useWorkspace } from '../../workspace/workspaceContext'
 import { findModel, useImageModels } from '../../models/modelsContext'
@@ -18,6 +19,7 @@ interface CardBoardProps {
 export function CardBoard({ project, canGenerate }: CardBoardProps) {
   const { actions } = useWorkspace()
   const [draft, setDraft] = useState('')
+  const [reviewNote, setReviewNote] = useState<string | null>(null)
   const parsed = parseCardList(draft)
 
   const missing = project.cards.filter((card) => card.variants.length === 0 && (card.status === 'idle' || card.status === 'error'))
@@ -35,6 +37,25 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
       estimate ? `\nEstimated cost ≈ ${estimate}.` : '\nNo estimate yet: nothing was generated in this project.'
     }`
     if (window.confirm(message)) actions.queueCards(project.id, missing.map((card) => card.id))
+  }
+
+  const unchecked = project.cards.filter((card) => chosenImageId(card) && !card.reviewing && !currentReview(card))
+  const recheck = unchecked.length === 0
+  const reviewable = recheck ? project.cards.filter((card) => chosenImageId(card) && !card.reviewing) : unchecked
+  const flagged = project.cards.filter((card) => {
+    const review = currentReview(card)
+    return review !== undefined && review.score <= FLAG_THRESHOLD && card.status !== 'queued' && card.status !== 'generating'
+  })
+
+  async function handleReview() {
+    if (!window.confirm(`Ask a vision model to compare ${reviewable.length} items with the style references and anchors? This spends a little credit.`)) return
+    setReviewNote('Checking…')
+    try {
+      const summary = await actions.reviewCards(project.id, reviewable.map((card) => card.id))
+      setReviewNote(`${summary.reviewed} checked · ${summary.flagged} off-style${summary.failed ? ` · ${summary.failed} failed` : ''} · ${formatCost(summary.cost) ?? '$0'}`)
+    } catch (err) {
+      setReviewNote(err instanceof Error ? err.message : 'Check failed.')
+    }
   }
 
   function handleAdd() {
@@ -96,6 +117,26 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
           >
             Generate missing ({missing.length})
           </button>
+          <button
+            type="button"
+            onClick={handleReview}
+            disabled={!canGenerate || reviewable.length === 0}
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg"
+            title="Compare each chosen image with the style references and anchors"
+          >
+            {recheck ? 'Re-check consistency' : 'Check consistency'} ({reviewable.length})
+          </button>
+          {flagged.length > 0 && (
+            <button
+              type="button"
+              onClick={() => actions.queueCards(project.id, flagged.map((card) => card.id))}
+              disabled={!canGenerate}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3 py-1.5 rounded-lg"
+            >
+              Regenerate off-style ({flagged.length})
+            </button>
+          )}
+          {reviewNote && <span className="text-zinc-400">{reviewNote}</span>}
           {(queued > 0 || generating > 0) && (
             <span className="text-zinc-400">
               {generating} generating · {queued} queued

@@ -3,6 +3,13 @@ import type { CardGenerationResult } from './generateCard'
 import type { FrameSettings } from './frame'
 import type { Card, NewCard, Project, ProjectSettings, View, WorkspaceState } from './types'
 
+export interface ReviewSummary {
+  reviewed: number
+  flagged: number
+  failed: number
+  cost: number
+}
+
 export interface WorkspaceActions {
   setView: (view: View) => void
   createProject: (name: string, settings?: Partial<ProjectSettings>) => string
@@ -23,6 +30,8 @@ export interface WorkspaceActions {
   setAnchor: (id: string, cardId: string, anchor: boolean) => void
   updateFrame: (id: string, frame: Partial<FrameSettings>) => void
   generateCard: (id: string, cardId: string) => Promise<CardGenerationResult>
+  /** Asks a vision model how well each chosen image matches the series (spends credit). */
+  reviewCards: (id: string, cardIds: string[]) => Promise<ReviewSummary>
   /** Latest state, readable from async code (chat tools) without waiting for a render. */
   getState: () => WorkspaceState
 }

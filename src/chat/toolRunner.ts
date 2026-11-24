@@ -2,7 +2,8 @@ import type { ImageModel } from '../types'
 import { formatCost } from '../lib/money'
 import { VECTOR_FORMAT, supportsVector } from '../lib/outputFormat'
 import { estimateBatchCost } from '../workspace/cost'
-import { projectLabel } from '../workspace/reducer'
+import { currentReview, projectLabel } from '../workspace/reducer'
+import { chosenImageId } from '../workspace/review'
 import type { NewCard, Project, ProjectSettings, WorkspaceState } from '../workspace/types'
 import type { WorkspaceActions } from '../workspace/workspaceContext'
 import { findProject } from '../workspace/workspaceContext'
@@ -127,6 +128,7 @@ export function summarizeWorkspace(state: WorkspaceState) {
         status: card.status,
         variants: card.variants.length,
         ...(card.anchor ? { anchor: true } : {}),
+        ...(currentReview(card) ? { style_score: currentReview(card)?.score, style_issues: currentReview(card)?.issues } : {}),
         chosen_variant: card.variants.findIndex((v) => v.id === card.chosenVariantId) + 1 || null,
         ...(card.error ? { error: card.error } : {}),
       })),
@@ -271,6 +273,20 @@ async function runTool(name: string, args: Args, ctx: ToolContext): Promise<unkn
       }
       actions.updateFrame(project.id, patch)
       return { ok: true, frame: projectFrame(findProject(actions.getState(), project.id) ?? project) }
+    }
+    case 'review_consistency': {
+      const project = requireProject(state, args)
+      const ids = strings(args, 'card_ids')
+      const cards = project.cards.filter((c) => (ids ? ids.includes(c.id) : !currentReview(c)) && chosenImageId(c) && !c.reviewing)
+      if (cards.length === 0) return { ok: false, reason: 'No item with a chosen image needs checking.' }
+      const approved = await ctx.confirm({
+        title: `Check the style of ${cards.length} item${cards.length === 1 ? '' : 's'}?`,
+        detail: 'A vision model compares each chosen image with the style references and anchors. This spends a little credit.',
+        confirmLabel: 'Check',
+      })
+      if (!approved) return { ok: false, reason: 'The user declined.' }
+      void actions.reviewCards(project.id, cards.map((c) => c.id)).catch(() => undefined)
+      return { ok: true, started: cards.length, note: 'Scores (1-5) appear on items as they come back; call get_workspace to read style_score and style_issues.' }
     }
     case 'cancel_generation':
       actions.cancelQueue(requireProject(state, args).id)

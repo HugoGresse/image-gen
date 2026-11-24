@@ -1,6 +1,6 @@
 import { projectFrame, sanitizeFrame } from './frame'
 import type { FrameSettings } from './frame'
-import type { Card, NewCard, Project, ProjectSettings, Variant, View, WorkspaceState } from './types'
+import type { Card, CardReview, NewCard, Project, ProjectSettings, Variant, View, WorkspaceState } from './types'
 
 export const DEFAULT_VARIANTS_PER_CARD = 2
 export const MAX_VARIANTS_PER_CARD = 4
@@ -26,6 +26,8 @@ export type WorkspaceAction =
   | { type: 'cancelQueue'; id: string }
   | { type: 'setAnchor'; id: string; cardId: string; anchor: boolean; now: number }
   | { type: 'updateFrame'; id: string; frame: Partial<FrameSettings>; now: number }
+  | { type: 'reviewStarted'; id: string; cardIds: string[] }
+  | { type: 'reviewFinished'; id: string; cardId: string; review?: CardReview; error?: string; now: number }
 
 export const initialWorkspace: WorkspaceState = { view: 'studio', projects: [], activeProjectId: null, loaded: false }
 
@@ -40,9 +42,11 @@ export function clampVariants(value: number): number {
 export function sanitizeProject(project: Project): Project {
   return {
     ...project,
-    cards: project.cards.map((card) =>
-      card.status === 'generating' || card.status === 'queued' ? { ...card, status: 'idle' } : card
-    ),
+    cards: project.cards.map((card) => ({
+      ...card,
+      status: card.status === 'generating' || card.status === 'queued' ? 'idle' : card.status,
+      reviewing: false,
+    })),
   }
 }
 
@@ -166,6 +170,15 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       return mapProject(state, action.id, action.now, (p) => mapCard(p, action.cardId, (c) => ({ ...c, anchor: action.anchor })))
     case 'updateFrame':
       return mapProject(state, action.id, action.now, (p) => ({ ...p, frame: sanitizeFrame({ ...projectFrame(p), ...action.frame }) }))
+    case 'reviewStarted':
+      return mapProject(state, action.id, null, (p) => ({
+        ...p,
+        cards: p.cards.map((card) => (action.cardIds.includes(card.id) ? { ...card, reviewing: true, reviewError: undefined } : card)),
+      }))
+    case 'reviewFinished':
+      return mapProject(state, action.id, action.now, (p) =>
+        mapCard(p, action.cardId, (c) => ({ ...c, reviewing: false, review: action.review ?? c.review, reviewError: action.error }))
+      )
     case 'chooseVariant':
       return mapProject(state, action.id, action.now, (p) =>
         mapCard(p, action.cardId, (c) =>
@@ -217,4 +230,10 @@ export function queueCounts(project: Project): { queued: number; generating: num
     queued: project.cards.filter((card) => card.status === 'queued').length,
     generating: project.cards.filter((card) => card.status === 'generating').length,
   }
+}
+
+/** The review of the image currently chosen, if any; older reviews judged another variant. */
+export function currentReview(card: Card): CardReview | undefined {
+  const chosen = card.variants.find((variant) => variant.id === card.chosenVariantId)
+  return card.review && chosen && card.review.imageId === chosen.imageId ? card.review : undefined
 }

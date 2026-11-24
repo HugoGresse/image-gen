@@ -1,6 +1,8 @@
 import type { Card } from '../../workspace/types'
 import { formatCost } from '../../lib/money'
 import { cardCost } from '../../workspace/cost'
+import { currentReview } from '../../workspace/reducer'
+import { FLAG_THRESHOLD } from '../../workspace/review'
 import { cssAspectRatio } from '../../lib/aspectRatio'
 import { StoredImage } from './StoredImage'
 import { FramedCard } from './FramedCard'
@@ -25,6 +27,8 @@ export function CardTile({ card, ratio, frame, canGenerate, onGenerate, onChoose
   const isGenerating = card.status === 'generating'
   const isBusy = isGenerating || card.status === 'queued'
   const cost = formatCost(cardCost(card))
+  const review = currentReview(card)
+  const reviewTone = !review ? '' : review.score <= FLAG_THRESHOLD ? 'bg-red-500 text-white' : review.score === 3 ? 'bg-amber-400 text-zinc-950' : 'bg-emerald-500 text-zinc-950'
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-2">
@@ -40,6 +44,14 @@ export function CardTile({ card, ratio, frame, canGenerate, onGenerate, onChoose
           <div className="absolute inset-0 bg-zinc-950/60 flex items-center justify-center text-xs text-violet-300">
             {isGenerating ? 'Generating…' : 'Queued'}
           </div>
+        )}
+        {(review || card.reviewing) && (
+          <span
+            className={`absolute top-1.5 left-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded ${card.reviewing ? 'bg-zinc-900/80 text-zinc-300' : reviewTone}`}
+            title={review ? `Style match ${review.score}/5${review.issues ? ` — ${review.issues}` : ''} (${review.model})` : 'Checking…'}
+          >
+            {card.reviewing ? 'Checking…' : `Style ${review?.score}/5`}
+          </span>
         )}
         <button
           type="button"
@@ -107,6 +119,8 @@ export function CardTile({ card, ratio, frame, canGenerate, onGenerate, onChoose
         className={`${INPUT} resize-none`}
       />
 
+      {review?.issues && review.score <= 3 && <p className="text-[11px] text-amber-300/90 break-words">Style: {review.issues}</p>}
+      {card.reviewError && <p className="text-[11px] text-red-400 break-words">Check failed: {card.reviewError}</p>}
       {card.error && (
         <p className={`text-[11px] break-words ${card.status === 'error' ? 'text-red-400' : 'text-amber-400'}`}>
           {card.status === 'error' ? card.error : `Some variants failed: ${card.error}`}

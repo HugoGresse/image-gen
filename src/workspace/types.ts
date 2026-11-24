@@ -20,6 +20,17 @@ export interface Variant {
   cost: number | null
 }
 
+export interface CardReview {
+  /** 1 (another style) to 5 (indistinguishable from the series). */
+  score: number
+  issues: string
+  /** The image that was judged; a review no longer applies once another variant is chosen. */
+  imageId: string
+  model: string
+  cost: number | null
+  reviewedAt: number
+}
+
 export interface Card {
   id: string
   title: string
@@ -32,6 +43,9 @@ export interface Card {
   chosenVariantId?: string
   /** Anchors lend their chosen image as a style reference to every other item. */
   anchor?: boolean
+  review?: CardReview
+  reviewing?: boolean
+  reviewError?: string
 }
 
 export interface Project {

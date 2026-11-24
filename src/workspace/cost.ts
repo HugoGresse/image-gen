@@ -5,8 +5,9 @@ export function cardCost(card: Card): number | null {
   return sumCosts(card.variants.map((variant) => variant.cost))
 }
 
+/** Generation plus consistency checks. */
 export function projectCost(project: Project): number | null {
-  return sumCosts(project.cards.map(cardCost))
+  return sumCosts([...project.cards.map(cardCost), ...project.cards.map((card) => card.review?.cost ?? null)])
 }
 
 /** Average billed cost of one image of this project, from what was already generated. */
