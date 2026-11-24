@@ -4,6 +4,8 @@ import { activeProject, projectLabel } from '../../workspace/reducer'
 import { useWorkspace } from '../../workspace/workspaceContext'
 import { CardBoard } from './CardBoard'
 import { ProjectSettingsPanel } from './ProjectSettingsPanel'
+import { FrameSettingsPanel } from './FrameSettingsPanel'
+import { ExportBar } from './ExportBar'
 
 export function ProjectsView({ hasApiKey }: { hasApiKey: boolean }) {
   const { state, actions } = useWorkspace()
@@ -48,6 +50,12 @@ export function ProjectsView({ hasApiKey }: { hasApiKey: boolean }) {
         <>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
             <ProjectSettingsPanel project={project} />
+            <div className="mt-4 pt-4 border-t border-zinc-800">
+              <FrameSettingsPanel project={project} />
+            </div>
+            <div className="mt-4 pt-4 border-t border-zinc-800">
+              <ExportBar project={project} />
+            </div>
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-zinc-800 text-xs text-zinc-500">
               <span>
                 {project.cards.length} items{spent && ` · ${spent} spent`}

@@ -1,3 +1,5 @@
+import type { FrameSettings } from './frame'
+
 export type View = 'studio' | 'projects'
 
 export interface ProjectSettings {
@@ -42,6 +44,8 @@ export interface Project {
   /** Image ids sent as input references with every card. */
   referenceIds: string[]
   settings: ProjectSettings
+  /** Drawn by the app around each illustration; absent on projects made before frames existed. */
+  frame?: FrameSettings
   cards: Card[]
 }
 

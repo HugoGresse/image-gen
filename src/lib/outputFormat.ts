@@ -59,6 +59,10 @@ function extensionOf(url: string): string | undefined {
   }
 }
 
+export function fileExtension(url: string): string {
+  return extensionOf(url) ?? 'png'
+}
+
 export function isSvgUrl(url: string): boolean {
   return extensionOf(url) === 'svg'
 }

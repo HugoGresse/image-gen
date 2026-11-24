@@ -3,10 +3,13 @@ import { formatCost } from '../../lib/money'
 import { cardCost } from '../../workspace/cost'
 import { cssAspectRatio } from '../../lib/aspectRatio'
 import { StoredImage } from './StoredImage'
+import { FramedCard } from './FramedCard'
+import type { FrameSettings } from '../../workspace/frame'
 
 interface CardTileProps {
   card: Card
   ratio: string
+  frame: FrameSettings
   canGenerate: boolean
   onGenerate: () => void
   onChoose: (variantId: string) => void
@@ -17,7 +20,7 @@ interface CardTileProps {
 
 const INPUT = 'w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-violet-500'
 
-export function CardTile({ card, ratio, canGenerate, onGenerate, onChoose, onUpdate, onRemove, onToggleAnchor }: CardTileProps) {
+export function CardTile({ card, ratio, frame, canGenerate, onGenerate, onChoose, onUpdate, onRemove, onToggleAnchor }: CardTileProps) {
   const chosen = card.variants.find((v) => v.id === card.chosenVariantId)
   const isGenerating = card.status === 'generating'
   const isBusy = isGenerating || card.status === 'queued'
@@ -26,7 +29,9 @@ export function CardTile({ card, ratio, canGenerate, onGenerate, onChoose, onUpd
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-2">
       <div className="relative rounded-lg overflow-hidden bg-zinc-800" style={{ aspectRatio: cssAspectRatio(ratio) }}>
-        {chosen ? (
+        {frame.enabled ? (
+          <FramedCard card={card} imageId={chosen?.imageId} ratio={ratio} frame={frame} />
+        ) : chosen ? (
           <StoredImage imageId={chosen.imageId} alt={card.title} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-600">No image yet</div>

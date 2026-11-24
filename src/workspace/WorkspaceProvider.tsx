@@ -193,6 +193,7 @@ export function WorkspaceProvider({ apiKey, onSpend, onError, children }: Worksp
       },
       cancelQueue: (id) => dispatch({ type: 'cancelQueue', id }),
       setAnchor: (id, cardId, anchor) => dispatch({ type: 'setAnchor', id, cardId, anchor, now: now() }),
+      updateFrame: (id, frame) => dispatch({ type: 'updateFrame', id, frame, now: now() }),
       chooseVariant: (id, cardId, variantId) => dispatch({ type: 'chooseVariant', id, cardId, variantId, now: now() }),
       generateCard,
     }

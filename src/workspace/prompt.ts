@@ -1,12 +1,13 @@
 import type { Card, NewCard } from './types'
 
-export function composeCardPrompt(styleGuide: string, card: Pick<Card, 'title' | 'prompt'>): string {
+export function composeCardPrompt(styleGuide: string, card: Pick<Card, 'title' | 'prompt'>, framed = false): string {
   const subject = card.prompt.trim() || card.title.trim()
   const style = styleGuide.trim()
   const parts = [
     style && `Art direction shared by every image in this series:\n${style}`,
     `Subject: ${subject}`,
-    'Illustration only: no border, frame, caption, title or lettering — those are added afterwards.',
+    framed &&
+      'Illustration only, full bleed: no border, frame, caption, title, number or lettering — those are added afterwards. Keep the main subject centred with some room at the edges, which may be slightly cropped.',
   ]
   return parts.filter(Boolean).join('\n\n')
 }

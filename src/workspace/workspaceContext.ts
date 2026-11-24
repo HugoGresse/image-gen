@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { CardGenerationResult } from './generateCard'
+import type { FrameSettings } from './frame'
 import type { Card, NewCard, Project, ProjectSettings, View, WorkspaceState } from './types'
 
 export interface WorkspaceActions {
@@ -20,6 +21,7 @@ export interface WorkspaceActions {
   queueCards: (id: string, cardIds: string[]) => number
   cancelQueue: (id: string) => void
   setAnchor: (id: string, cardId: string, anchor: boolean) => void
+  updateFrame: (id: string, frame: Partial<FrameSettings>) => void
   generateCard: (id: string, cardId: string) => Promise<CardGenerationResult>
   /** Latest state, readable from async code (chat tools) without waiting for a render. */
   getState: () => WorkspaceState

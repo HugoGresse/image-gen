@@ -73,6 +73,21 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     card_id: { type: 'string' },
     anchor: { type: 'boolean' },
   }, ['project_id', 'card_id', 'anchor']),
+  tool('add_preset', 'Add a ready-made list of items with numbers, titles and prompts.', {
+    project_id: projectId,
+    preset: { type: 'string', enum: ['tarot-major', 'tarot-full'], description: 'tarot-major = 22 major arcana, tarot-full = all 78 cards' },
+  }, ['project_id', 'preset']),
+  tool('update_frame', 'Configure the frame the app draws around every item (border, bands with title and number).', {
+    project_id: projectId,
+    enabled: { type: 'boolean' },
+    border_color: { type: 'string', description: '#rrggbb' },
+    background_color: { type: 'string', description: '#rrggbb, behind the title and number' },
+    text_color: { type: 'string', description: '#rrggbb' },
+    border_width: { type: 'number', minimum: 0, maximum: 12, description: 'Percent of the item width' },
+    font: { type: 'string', enum: ['serif', 'sans', 'mono'] },
+    show_title: { type: 'boolean' },
+    show_number: { type: 'boolean' },
+  }, ['project_id']),
   tool('cancel_generation', 'Cancel the items still waiting in the generation queue (running ones finish).', { project_id: projectId }, ['project_id']),
   tool('delete_project', 'Delete a project and all its images. The user is asked to confirm.', { project_id: projectId }, ['project_id']),
 ]
@@ -84,7 +99,7 @@ Projects hold a series of items (for example the 78 cards of a tarot deck) that 
 - style reference images are sent with every item;
 - anchor items: their chosen image is sent as a reference for every other item. For a big series, generate 2-3 anchors first, let the user pick variants, mark them as anchors, then generate the rest;
 - the model, ratio and output format are fixed per project.
-Frames, captions and numbers are drawn by the app on top of the illustration, so item prompts must never ask for text, borders or titles.
+When the project's frame is enabled (update_frame), the app draws the border, title and number around each illustration, so item prompts must never ask for text, borders or titles. Exports (ZIP, print/PDF) are done by the user from the Projects view.
 
 Rules:
 - Call get_workspace before using ids, and after changes when you need fresh state.

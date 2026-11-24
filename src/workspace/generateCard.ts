@@ -1,6 +1,7 @@
 import type { Attachment, ImageModel } from '../types'
 import { generateImages } from '../lib/openrouter'
 import { imageDataUrl, storeImageUrl } from './images'
+import { projectFrame } from './frame'
 import { composeCardPrompt } from './prompt'
 import type { Card, Project, Variant } from './types'
 
@@ -72,7 +73,7 @@ export async function generateCardVariants(
   const referenceIds = pickReferences(project.referenceIds, extraReferenceIds, model.maxReferenceImages)
   const attachments = await referenceAttachments(referenceIds, referenceIds.length)
   const { images, cost } = generateImages(apiKey, {
-    prompt: composeCardPrompt(project.styleGuide, card),
+    prompt: composeCardPrompt(project.styleGuide, card, projectFrame(project).enabled),
     count: project.settings.variantsPerCard,
     ratio: project.settings.ratio,
     model,

@@ -1,3 +1,5 @@
+import { projectFrame, sanitizeFrame } from './frame'
+import type { FrameSettings } from './frame'
 import type { Card, NewCard, Project, ProjectSettings, Variant, View, WorkspaceState } from './types'
 
 export const DEFAULT_VARIANTS_PER_CARD = 2
@@ -23,6 +25,7 @@ export type WorkspaceAction =
   | { type: 'queueCards'; id: string; cardIds: string[] }
   | { type: 'cancelQueue'; id: string }
   | { type: 'setAnchor'; id: string; cardId: string; anchor: boolean; now: number }
+  | { type: 'updateFrame'; id: string; frame: Partial<FrameSettings>; now: number }
 
 export const initialWorkspace: WorkspaceState = { view: 'studio', projects: [], activeProjectId: null, loaded: false }
 
@@ -161,6 +164,8 @@ export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction)
       }))
     case 'setAnchor':
       return mapProject(state, action.id, action.now, (p) => mapCard(p, action.cardId, (c) => ({ ...c, anchor: action.anchor })))
+    case 'updateFrame':
+      return mapProject(state, action.id, action.now, (p) => ({ ...p, frame: sanitizeFrame({ ...projectFrame(p), ...action.frame }) }))
     case 'chooseVariant':
       return mapProject(state, action.id, action.now, (p) =>
         mapCard(p, action.cardId, (c) =>

@@ -7,6 +7,8 @@ import { formatCost } from '../../lib/money'
 import { useWorkspace } from '../../workspace/workspaceContext'
 import { findModel, useImageModels } from '../../models/modelsContext'
 import { CardTile } from './CardTile'
+import { projectFrame } from '../../workspace/frame'
+import { PRESETS, isPresetId, missingPresetCards } from '../../workspace/presets'
 
 interface CardBoardProps {
   project: Project
@@ -21,6 +23,7 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
   const missing = project.cards.filter((card) => card.variants.length === 0 && (card.status === 'idle' || card.status === 'error'))
   const { queued, generating } = queueCounts(project)
   const { models } = useImageModels()
+  const frame = projectFrame(project)
   const model = findModel(models, project.settings.modelId)
   const anchorCount = project.cards.filter((card) => card.anchor).length
   const referenceOverflow = model !== undefined && anchorCount > 0 && project.referenceIds.length + anchorCount > model.maxReferenceImages
@@ -54,7 +57,24 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
           placeholder={'0 | The Fool | A young traveller at the edge of a cliff, a small dog at his heels\nI | The Magician | A figure raising a wand, tools of the four suits on the table'}
           className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500 resize-y font-mono"
         />
-        <div className="flex justify-end mt-2">
+        <div className="flex justify-end items-center gap-2 mt-2">
+          <select
+            value=""
+            onChange={(e) => {
+              if (!isPresetId(e.target.value)) return
+              const cards = missingPresetCards(e.target.value, project.cards.map((card) => card.title))
+              if (cards.length > 0) actions.addCards(project.id, cards)
+            }}
+            aria-label="Add a preset list"
+            className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-zinc-300"
+          >
+            <option value="">Add a preset…</option>
+            {Object.entries(PRESETS).map(([id, preset]) => (
+              <option key={id} value={id}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={handleAdd}
@@ -106,6 +126,7 @@ export function CardBoard({ project, canGenerate }: CardBoardProps) {
               key={card.id}
               card={card}
               ratio={project.settings.ratio}
+              frame={frame}
               canGenerate={canGenerate}
               onGenerate={() => actions.queueCards(project.id, [card.id])}
               onChoose={(variantId) => actions.chooseVariant(project.id, card.id, variantId)}

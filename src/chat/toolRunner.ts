@@ -6,6 +6,9 @@ import { projectLabel } from '../workspace/reducer'
 import type { NewCard, Project, ProjectSettings, WorkspaceState } from '../workspace/types'
 import type { WorkspaceActions } from '../workspace/workspaceContext'
 import { findProject } from '../workspace/workspaceContext'
+import { isPresetId, missingPresetCards } from '../workspace/presets'
+import { projectFrame } from '../workspace/frame'
+import type { FrameSettings } from '../workspace/frame'
 
 export interface ConfirmRequest {
   title: string
@@ -114,6 +117,7 @@ export function summarizeWorkspace(state: WorkspaceState) {
       name: projectLabel(active),
       style_guide: active.styleGuide,
       reference_images: active.referenceIds.length,
+      frame: projectFrame(active),
       settings: active.settings,
       items: active.cards.map((card) => ({
         id: card.id,
@@ -231,6 +235,42 @@ async function runTool(name: string, args: Args, ctx: ToolContext): Promise<unkn
       if (typeof args.anchor !== 'boolean') throw new ToolInputError('anchor must be a boolean')
       actions.setAnchor(project.id, cardId, args.anchor)
       return { ok: true }
+    }
+    case 'add_preset': {
+      const project = requireProject(state, args)
+      const preset = required(args, 'preset')
+      if (!isPresetId(preset)) throw new ToolInputError(`Unknown preset ${preset}`)
+      const cards = missingPresetCards(preset, project.cards.map((card) => card.title))
+      return { ok: true, added: cards.length > 0 ? actions.addCards(project.id, cards).length : 0 }
+    }
+    case 'update_frame': {
+      const project = requireProject(state, args)
+      const patch: Partial<FrameSettings> = {}
+      const flags = { enabled: 'enabled', show_title: 'showTitle', show_number: 'showNumber' } as const
+      Object.entries(flags).forEach(([arg, key]) => {
+        if (args[arg] === undefined) return
+        if (typeof args[arg] !== 'boolean') throw new ToolInputError(`${arg} must be a boolean`)
+        patch[key] = args[arg]
+      })
+      const colors = { border_color: 'borderColor', background_color: 'backgroundColor', text_color: 'textColor' } as const
+      Object.entries(colors).forEach(([arg, key]) => {
+        const value = text(args, arg)
+        if (value === undefined) return
+        if (!/^#[0-9a-f]{6}$/i.test(value)) throw new ToolInputError(`${arg} must be a #rrggbb color`)
+        patch[key] = value
+      })
+      const border = args.border_width
+      if (border !== undefined) {
+        if (typeof border !== 'number') throw new ToolInputError('border_width must be a number')
+        patch.borderWidth = border
+      }
+      const font = text(args, 'font')
+      if (font !== undefined) {
+        if (font !== 'serif' && font !== 'sans' && font !== 'mono') throw new ToolInputError('font must be serif, sans or mono')
+        patch.font = font
+      }
+      actions.updateFrame(project.id, patch)
+      return { ok: true, frame: projectFrame(findProject(actions.getState(), project.id) ?? project) }
     }
     case 'cancel_generation':
       actions.cancelQueue(requireProject(state, args).id)
